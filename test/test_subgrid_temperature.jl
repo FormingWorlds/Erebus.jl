@@ -87,6 +87,25 @@ end
             phi_dry=zeros(c.n),
         )
         @test !isapprox(tkm, c.tkm; rtol=1e-6)
+        tkm1 = copy(c.tkm)
+        Erebus.apply_subgrid_temperature_diffusion!(
+            c.xm,
+            c.ym,
+            c.tm,
+            tkm1,
+            zeros(c.n),
+            c.tk1,
+            zeros(size(c.tk1)),
+            zeros(size(c.tk1)),
+            zeros(size(c.tk1)),
+            3.0e12,
+            c.n,
+            1;
+            coords=c.coords,
+            phi_dry=zeros(c.n),
+            dsubgridt=1.0,
+        )
+        @test isapprox(tkm, tkm1; rtol=1e-14)
         @test isapprox(SolverConfig().dsubgridt, 1.0; rtol=1e-12)
         # Scale guard: a factor of 10 or 0.1 is not the default.
         @test !isapprox(SolverConfig().dsubgridt, 10.0; rtol=1e-3)
@@ -336,9 +355,78 @@ end
         # The start node temperature is the lowest term: 280 - 30 stops at 270.
         @test isapprox(limited(280.0, 400.0, 270.0, 300.0, 0.0), 270.0; rtol=1e-12)
         # Conduction cooling stops at the end node temperature, 280.
-        @test isapprox(limited(300.0, 400.0, 400.0, 280.0, -30.0), 280.0; rtol=1e-12)
-        # Without a floor, the subgrid part is not limited: 260 - 30 = 230.
+        @test isapprox(limited(300.0, 250.0, 260.0, 280.0, -30.0), 280.0; rtol=1e-12)
+        # Subgrid warming above the floor is kept under conduction cooling: 250 - 30 stops at 250.
+        @test isapprox(limited(250.0, 200.0, 300.0, 280.0, -30.0), 250.0; rtol=1e-12)
+        # Above the floor, the subgrid part is not limited: 260 - 30 = 230.
         @test isapprox(limited(260.0, 100.0, 100.0, 300.0, 0.0), 230.0; rtol=1e-12)
+    end
+
+    @testset "conduction acts on top of the cold floor" begin
+        # Two markers between cold and hot nodes: the subgrid part stops at the floor, and the
+        # conduction increment dTc of the nodes then acts in full on both markers.
+        coords = GridCoordinates(GridConfig(; Nx=51, Ny=51, xsize=5.0e4, ysize=5.0e4))
+        j0 = 25
+        xm = [coords.xp[j0] + 0.02 * coords.dx, coords.xp[j0] + 0.48 * coords.dx]
+        ym = fill(coords.yp[j0] + 0.5 * coords.dy, 2)
+        rhocp, k = fill(3.3e6, 2), fill(3.0, 2)
+        function pair(dTc)
+            tkm = [290.0, 600.0]
+            tkm_pre = copy(tkm)
+            tk1 = fill(290.0, coords.Ny1, coords.Nx1)
+            tk1[:, (j0 + 1):end] .= 1800.0
+            DTc = fill(dTc, size(tk1))
+            tk2 = tk1 .+ DTc
+            DT = copy(DTc)
+            TKSUM, RHOCPSUM = zeros(size(tk1)), zeros(size(tk1))
+            Erebus.apply_subgrid_temperature_diffusion!(
+                xm,
+                ym,
+                [1, 1],
+                tkm,
+                zeros(2),
+                tk1,
+                DT,
+                TKSUM,
+                RHOCPSUM,
+                1.0e12,
+                2,
+                1;
+                coords=coords,
+                dsubgridt=1.0,
+                rhocptotalm=rhocp,
+                ktotalm=k,
+            )
+            Erebus.limit_marker_temperature_increment!(
+                xm,
+                ym,
+                [1, 1],
+                tkm,
+                rhocp,
+                DT,
+                tk2,
+                TKSUM,
+                RHOCPSUM,
+                2;
+                coords=coords,
+                DT_conduction=DTc,
+                tkm_floor=tkm_pre,
+                tk_floor=tk1,
+            )
+            Erebus.update_marker_temperature!(xm, ym, tkm, DT, tk2, 2, 2; coords=coords)
+            return tkm
+        end
+        for (dTc, expected) in (
+            (0.0, [290.0, 600.0]),
+            (50.0, [340.0, 650.0]),
+            (150.0, [440.0, 750.0]),
+            (-20.0, [270.0, 580.0]),
+        )
+            t = pair(dTc)
+            @test isapprox(t, expected; rtol=1e-12)
+            # Heat of the pair: only the conduction increment of both markers is added.
+            @test isapprox(sum(t) - 890.0, 2.0 * dTc; atol=1e-9)
+        end
     end
 
     @testset "the cold floor needs both inputs of the right size" begin
@@ -392,6 +480,73 @@ end
         @test minimum(core.tkm[rocks]) >= 290.0 - 1.0e-9
         # The relaxation acted: some rock markers warmed toward the hot nodes.
         @test !isapprox(core.tkm[rocks], tkm_pre[rocks]; rtol=1e-6)
+    end
+
+    @testset "the step helper equals the explicit calls" begin
+        cfg = override_config(
+            default_config(), Dict{String,Any}("geometry.spherical_metric" => false)
+        )
+        state, coords, ws, _, _ = init_simulation(cfg)
+        core = state.markers.core
+        g = state.grids
+        rocks = findall(<(3), core.tm)
+        core.rhocptotalm[rocks] .= 3.3e6
+        core.ktotalm[rocks] .= range(0.5, 5.0; length=length(rocks))
+        core.tkm[rocks] .= 290.0
+        g.tk1 .= 290.0
+        g.tk1[:, 2:2:end] .= 1800.0
+        g.tk2 .= g.tk1 .+ 5.0
+        g.DT .= 5.0
+        state.dt = 1.0e13
+        state.timestep = 2
+        n = length(state.markers)
+        tkm = copy(core.tkm)
+        DT = copy(g.DT)
+        TK, RC = zeros(size(DT)), zeros(size(DT))
+        Erebus.apply_subgrid_temperature_diffusion!(
+            core.xm,
+            core.ym,
+            core.tm,
+            tkm,
+            core.phim,
+            g.tk1,
+            DT,
+            TK,
+            RC,
+            state.dt,
+            n,
+            Erebus.marker_property_mode;
+            coords=coords,
+            dsubgridt=1.0,
+            phi_dry=Erebus.dry_porosity(state.markers),
+            rhocptotalm=core.rhocptotalm,
+            ktotalm=core.ktotalm,
+        )
+        Erebus.limit_marker_temperature_increment!(
+            core.xm,
+            core.ym,
+            core.tm,
+            tkm,
+            core.rhocptotalm,
+            DT,
+            g.tk2,
+            TK,
+            RC,
+            n;
+            coords=coords,
+            DT_conduction=copy(g.DT),
+            tkm_floor=copy(core.tkm),
+            tk_floor=g.tk1,
+        )
+        diffuse_and_update_markers!(state, coords, cfg, ws)
+        @test isapprox(core.tkm[rocks], tkm[rocks]; rtol=1e-12)
+        @test isapprox(g.DT, DT; rtol=1e-12)
+        # A zero time step leaves the marker temperatures unchanged.
+        tkm0 = copy(core.tkm)
+        state.dt = 0.0
+        g.DT .= 0.0
+        diffuse_and_update_markers!(state, coords, cfg, ws)
+        @test isapprox(core.tkm[rocks], tkm0[rocks]; rtol=0.0, atol=0.0)
     end
 
     @testset "rock marker temperature follows the grid at the air boundary" begin

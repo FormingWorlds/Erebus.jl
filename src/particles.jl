@@ -4771,9 +4771,9 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
     - w3d: marker out-of-plane length under the spherical metric [m], or `nothing` for
       equal weights
     - tkm_floor, tk_floor: marker temperatures before subgrid diffusion and the node
-      temperatures of the step start; when given, the level that the solve part may not
-      cool below is raised to at least `min(tkm_floor[m], min(tk_floor nodes))`, so the
-      subgrid counterpart cannot cool a marker below its own start or its nodes
+      temperatures of the step start; when given, the subgrid part of the increment stops
+      at the floor `min(tkm_floor[m], min(tk_floor nodes))`, and the solve part then acts
+      on top of the floor with the usual bound
 
 # Returns
 
@@ -4844,13 +4844,19 @@ function limit_marker_temperature_increment!(
     @inline function marker_range(m, i, j, weights)
         increment = dot4(grid_vector(i, j, DT), weights)
         T_new = tkm[m] + correction[m] + increment
-        T_base = tkm[m]
-        if DT_conduction !== DT
-            T_base += increment - dot4(grid_vector(i, j, DT_conduction), weights)
+        dTc = if DT_conduction === DT
+            increment
+        else
+            dot4(grid_vector(i, j, DT_conduction), weights)
         end
+        T_base = tkm[m] + (increment - dTc)
         if tkm_floor !== nothing
-            # the subgrid part must not take the marker below its start or its nodes
-            T_base = max(T_base, min(tkm_floor[m], minimum(grid_vector(i, j, tk_floor))))
+            T_floor = min(tkm_floor[m], minimum(grid_vector(i, j, tk_floor)))
+            # the subgrid part stops at the floor; the solve increment acts on top of it
+            if T_base < T_floor
+                return T_new,
+                max(T_floor + dTc, min(T_floor, minimum(grid_vector(i, j, tk2))))
+            end
         end
         return T_new, min(T_base, minimum(grid_vector(i, j, tk2)))
     end
