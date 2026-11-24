@@ -55,6 +55,7 @@ makedocs(;
             "Spherical Compaction" => "validation/spherical_compaction.md",
             "Spherical Pressure Diffusion" => "validation/spherical_pressure_diffusion.md",
             "Spherical Momentum" => "validation/spherical_momentum.md",
+            "Porous Shell" => "validation/porous_shell.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

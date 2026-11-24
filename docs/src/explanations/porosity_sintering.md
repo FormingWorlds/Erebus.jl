@@ -375,9 +375,57 @@ The test grids of 17 by 17 nodes have $\Delta x = 8.75$ km for $R_p = 50$ km and
 
 ---
 
+## How deep is the porous shell?
+
+The short answer: the shell ends where the peak temperature of the rock reached the sintering temperature of 700 K, and `porous_shell_depth` measures its depth on the rock markers.
+
+The porous shell is the outer layer of a planetesimal where the rock never sintered.
+Its markers keep the porosity of cold pressing, because they did not stay hot enough for long enough.
+The function `porous_shell_depth` measures the depth of this layer on the rock markers.
+
+A marker counts as sintered when sintering has lowered its porosity by at least $10^{-3}$, that is, when `dphi_sinter` $\geq 10^{-3}$.
+Cold pressing does not count, because it changes `phi_d` but not `dphi_sinter`.
+The function divides the slice into 16 equal sectors around the centre of the planetesimal.
+It divides each sector into radial bins of width $\Delta r$, from the surface inward.
+In each sector, the first bin whose median marker is sintered ends the shell.
+The depth of the sector is the depth of the outer edge of that bin.
+The result is the median of the 16 sector depths, with the 25 % and 75 % quartiles.
+
+- Rock markers above the radius $R_p$ do not count.
+  The pressure there is 0, so they never sinter.
+- An empty bin is skipped.
+- A sector without a sintered bin has the depth $R_p$: the whole sector is porous.
+- With `measure = :phi_gt_04`, a marker counts as sintered when `phi_d` $\leq 0.4$.
+  The depth is then that of the region with $\phi > 0.4$, the measure of Fig. 8 of Lichtenberg et al. (2016a).
+  This measure gives a result only when the cold-pressed porosity at the surface is above 0.4.
+
+On a simulation state, the bins are half the smaller grid spacing.
+Here `cfg` is a configuration with `porosity.model = "henke2012"`:
+
+```julia
+using Erebus
+st = simulation_loop(cfg; output_path=mktempdir())
+shell = porous_shell_depth(st, GridCoordinates(cfg.grid), cfg.geometry)
+shell.median, shell.q25, shell.q75   # depths in m
+```
+
+A model without the dry porosity group (`porosity.model = "none"`) gives an `ArgumentError`.
+
+**Why the shell can be thin.**
+The porous layer conducts heat much less well than compact rock.
+At $\phi = 0.25$ the conductivity is 0.21 W/(m K), against 3 W/(m K) at $\phi = 0$.
+A thin layer can therefore hold the drop from the sintering temperature of 700 K to the cold surface.
+Below it, the rock is above the sintering temperature of 700 K and sinters.
+Take a body with $R_p = 20$ km and $\phi_{init} = 0.25$ in the 1-D reference model, with steps of 2 kyr.
+It keeps a shell of 380 m when it forms 1.5 Myr after the first solids.
+It keeps a shell of 4.55 km when it forms at 2.5 Myr, because it has less $^{26}$Al and stays cooler.
+
+---
+
 ## Which tests check this?
 
-No validation case runs this model yet.
+The validation case [Porous Shell](../validation/porous_shell.md) runs this model in the complete time loop.
+It compares the shell depth and the maximum temperature with an independent 1-D model.
 The unit tests in `test/test_porosity_henke.jl` check each law and each place in the code that uses it.
 
 !!! details "Test details"

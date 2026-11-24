@@ -3213,3 +3213,303 @@ end
         @test isapprox(st_new.markers.phi_d, st_same.markers.phi_d; rtol=1e-10)
     end
 end
+
+# Rock markers on rays at the sector centres, 8 per radial bin of width `dr`, at depths
+# off the bin edges; `f(depth, s)` gives `(dphi_sinter, phi_d)` of a marker in sector `s`.
+function _shell_markers(f; n=16, R=1.0, dr=0.04, xc=0.0, yc=0.0, skip=Returns(false))
+    h = dr / 8
+    xm, ym, tm, dphi, phid = Float64[], Float64[], Int[], Float64[], Float64[]
+    for s in 1:n
+        th = -pi + (s - 0.5) * 2pi / n
+        for j in 1:floor(Int, R / h)
+            depth = (j - 0.5) * h
+            skip(depth, s) && continue
+            push!(xm, xc + (R - depth) * cos(th))
+            push!(ym, yc + (R - depth) * sin(th))
+            push!(tm, isodd(j) ? 1 : 2)
+            ds, pd = f(depth, s)
+            push!(dphi, ds)
+            push!(phid, pd)
+        end
+    end
+    pg = Erebus.PorosityGroup(
+        phid, fill(0.45, length(phid)), fill(300.0, length(phid)), dphi
+    )
+    return xm, ym, tm, pg
+end
+
+_shell_sharp(d0) = (depth, s) -> depth < d0 ? (0.0, 0.45) : (0.02, 0.3)
+
+function _shell(xm, ym, tm, pg; xc=0.0, yc=0.0, R=1.0, dr=0.04, kw...)
+    return Erebus.porous_shell_depth(
+        xm, ym, tm, pg; xcenter=xc, ycenter=yc, rplanet=R, dr=dr, kw...
+    )
+end
+
+@testset "Porous shell depth on rock markers" begin
+    dr = 0.04
+    @testset "Bin edges: the outer edge of the first sintered bin" begin
+        # 75 % of bin 3 sintered gives 2 dr; 25 % gives 3 dr (a k dr edge gives 3 and 4)
+        r1 = _shell(_shell_markers(_shell_sharp(2.25dr))...)
+        r2 = _shell(_shell_markers(_shell_sharp(2.75dr))...)
+        @test isapprox(r1.median, 2dr; atol=1e-12)
+        @test isapprox(r2.median, 3dr; atol=1e-12)
+        @test r1.nsector_used == 16 && r2.nsector_used == 16
+        r3 = _shell(_shell_markers(_shell_sharp(0.15))...)
+        @test isapprox(r3.median, 0.16; atol=1e-12)
+    end
+    @testset "A few strongly sintered markers do not sinter a bin" begin
+        # Bin 1 to 3: 2 of 8 markers sintered by 0.3 (mean 0.075, median 0)
+        f = (depth, s) -> if depth < 3dr
+            (mod(floor(Int, depth / (dr / 8)), 8) < 2 ? 0.3 : 0.0, 0.45)
+        else
+            (0.02, 0.3)
+        end
+        r = _shell(_shell_markers(f)...)
+        @test isapprox(r.median, 3dr; atol=1e-12)
+        @test isapprox(r.q25, 3dr; atol=1e-12) && isapprox(r.q75, 3dr; atol=1e-12)
+    end
+    @testset "Sintered band above an unsintered interior" begin
+        # Unsintered bin 1, sintered bins 2 and 3, unsintered below: d = dr
+        f = (depth, s) -> (dr <= depth < 3dr ? 0.02 : 0.0, 0.45)
+        r = _shell(_shell_markers(f)...)
+        @test isapprox(r.median, dr; atol=1e-12)
+        @test isapprox(r.q75, dr; atol=1e-12)
+    end
+    @testset "Median and quartiles over sectors" begin
+        # Sector s has its edge in bin s with 75 % sintered: d_s = (s - 1) dr
+        f = (depth, s) -> depth < (s - 0.75) * dr ? (0.0, 0.45) : (0.02, 0.3)
+        r = _shell(_shell_markers(f)...)
+        @test isapprox(r.median, 7.5dr; atol=1e-12)
+        @test isapprox(r.q25, 3.75dr; atol=1e-12)
+        @test isapprox(r.q75, 11.25dr; atol=1e-12)
+    end
+    @testset "Thresholds of both measures" begin
+        at = (depth, s) -> depth < 2.25dr ? (0.0, 0.45) : (1.0e-3, 0.4)
+        below = (depth, s) -> depth < 2.25dr ? (0.0, 0.45) : (1.0e-3 - 1e-9, 0.4 + 1e-9)
+        @test isapprox(_shell(_shell_markers(at)...).median, 2dr; atol=1e-12)
+        @test isapprox(_shell(_shell_markers(below)...).median, 1.0; atol=1e-12)
+        @test isapprox(
+            _shell(_shell_markers(at)...; measure=:phi_gt_04).median, 2dr; atol=1e-12
+        )
+        @test isapprox(
+            _shell(_shell_markers(below)...; measure=:phi_gt_04).median, 1.0; atol=1e-12
+        )
+    end
+    @testset "Cold pressing alone leaves the whole body unsintered" begin
+        cold = (depth, s) -> (0.0, 0.425)
+        @test isapprox(_shell(_shell_markers(cold)...).median, 1.0; atol=1e-12)
+        @test isapprox(
+            _shell(_shell_markers(cold)...; measure=:phi_gt_04).median, 1.0; atol=1e-12
+        )
+    end
+    @testset "Empty bins are skipped and markers above the surface do not count" begin
+        xm, ym, tm, pg = _shell_markers(
+            _shell_sharp(3.25dr); skip=(depth, s) -> dr <= depth < 2dr
+        )
+        @test isapprox(_shell(xm, ym, tm, pg).median, 3dr; atol=1e-12)
+        # 9 sintered markers above the surface (P = 0 there) leave bin 1 unsintered
+        xa, ya, ta, pa = _shell_markers(_shell_sharp(3.25dr); n=1)
+        for i in 1:9
+            push!(xa, -(1.0 + 0.01i))
+            push!(ya, 1e-3)
+            push!(ta, 1)
+        end
+        pa = Erebus.PorosityGroup(
+            [pa.phi_d; fill(0.3, 9)],
+            [pa.phi0; fill(0.45, 9)],
+            [pa.tkm_max; fill(300.0, 9)],
+            [pa.dphi_sinter; fill(0.02, 9)],
+        )
+        ra = _shell(xa, ya, ta, pa; nsector=1)
+        @test isapprox(ra.median, 3dr; atol=1e-12)
+        @test ra.nsector_used == 1
+    end
+    @testset "Angle pi, the centre and the material filter" begin
+        # A marker at angle +pi falls in the last sector, not past it
+        pg1 = Erebus.PorosityGroup([0.3], [0.45], [300.0], [0.02])
+        r = _shell([-0.99], [0.0], [1], pg1)
+        @test r.nsector_used == 1
+        @test isapprox(r.median, 0.0; atol=1e-12)
+        base = _shell(_shell_markers(_shell_sharp(2.25dr))...)
+        shifted = _shell(
+            _shell_markers(_shell_sharp(2.25dr); xc=3.0, yc=-2.0)...; xc=3.0, yc=-2.0
+        )
+        @test isapprox(shifted.median, base.median; atol=1e-12)
+        # Sintered markers of tm 0, 3 and 4 in the shell change nothing
+        xm, ym, tm, pg = _shell_markers(_shell_sharp(2.25dr))
+        xo, yo, to, po = _shell_markers((d, s) -> (0.5, 0.1))
+        for t in (0, 3, 4)
+            append!(xm, xo)
+            append!(ym, yo)
+            append!(tm, fill(t, length(to)))
+            pg = Erebus.PorosityGroup(
+                [pg.phi_d; po.phi_d],
+                [pg.phi0; po.phi0],
+                [pg.tkm_max; po.tkm_max],
+                [pg.dphi_sinter; po.dphi_sinter],
+            )
+        end
+        @test isapprox(_shell(xm, ym, tm, pg).median, 2dr; atol=1e-12)
+        # Only crust (tm 2) markers still measure the shell
+        xm2, ym2, tm2, pg2 = _shell_markers(_shell_sharp(2.25dr))
+        tm2 .= 2
+        @test isapprox(_shell(xm2, ym2, tm2, pg2).median, 2dr; atol=1e-12)
+    end
+    @testset "No rock markers give NaN" begin
+        xm, ym, tm, pg = _shell_markers(_shell_sharp(2.25dr))
+        tm .= 3
+        r = _shell(xm, ym, tm, pg)
+        @test isnan(r.median) && isnan(r.q25) && isnan(r.q75)
+        @test r.nsector_used == 0
+    end
+    @testset "Method on a simulation state" begin
+        cfg = _hk_cfg()
+        st, coords, _ = _hk_state(cfg)
+        mk = st.markers
+        # Mark the rock below half the radius as sintered: the shell is about R / 2
+        g = cfg.geometry
+        r = hypot.(mk.xm .- g.xcenter, mk.ym .- g.ycenter)
+        mk.dphi_sinter .= ifelse.(r .< 0.5 * g.rplanet, 0.02, 0.0)
+        res = Erebus.porous_shell_depth(st, coords, g)
+        direct = Erebus.porous_shell_depth(
+            mk.xm,
+            mk.ym,
+            mk.tm,
+            mk.groups.porosity;
+            xcenter=g.xcenter,
+            ycenter=g.ycenter,
+            rplanet=g.rplanet,
+            dr=0.5 * min(coords.dx, coords.dy),
+        )
+        @test isapprox(res.median, direct.median; rtol=1e-14)
+        @test res.nsector_used == direct.nsector_used == 16
+        @test 0.4 * g.rplanet < res.median < 0.6 * g.rplanet
+        # Off-centre body (62, 78) km, R 50 km, crust from 40 km, dx 8750 m. Rock below
+        # R - 4375 m is sintered: in bins of dx / 2 bin 1 is unsintered and bin 2 sintered
+        # in every sector, so each sector depth is 4375 m
+        cfg_o = _hk_cfg(
+            "geometry.xcenter" => 62_000.0,
+            "geometry.ycenter" => 78_000.0,
+            "geometry.rcrust" => 40_000.0,
+        )
+        st_o, coords_o, _ = _hk_state(cfg_o)
+        mo = st_o.markers
+        @test isapprox(coords_o.dx, 8750.0; rtol=1e-14)
+        @test isapprox(cfg_o.geometry.rplanet, 50_000.0; rtol=1e-14)
+        r_o = hypot.(mo.xm .- 62_000.0, mo.ym .- 78_000.0)
+        mo.dphi_sinter .= ifelse.(r_o .< 50_000.0 - 4375.0, 0.02, 0.0)
+        off = Erebus.porous_shell_depth(st_o, coords_o, cfg_o.geometry)
+        @test off.nsector_used == 16
+        # Bins of dx give sector depths of 0 or 8750 m, swapped centres scatter them and a
+        # surface at rcrust gives 0: none of these has both quartiles at 4375 m
+        @test isapprox(off.q25, 4375.0; atol=1e-9)
+        @test isapprox(off.median, 4375.0; atol=1e-9)
+        @test isapprox(off.q75, 4375.0; atol=1e-9)
+        st0, coords0, _ = _hk_state(_hk_cfg("porosity.model" => :none))
+        @test_throws ArgumentError Erebus.porous_shell_depth(st0, coords0, g)
+    end
+    @testset "Method on a state with dx != dy: smaller spacing, nsector and measure" begin
+        # 17 x 33 nodes: dx 8750 m, dy 4375 m, bins of min(dx, dy) / 2 = 2187.5 m. Rock
+        # below R - 2187.5 m is sintered, so each sector depth is 2187.5 m
+        cfg = _hk_cfg("grid.Ny" => 33)
+        st, coords, _ = _hk_state(cfg)
+        g = cfg.geometry
+        @test isapprox(coords.dx, 8750.0; rtol=1e-14)
+        @test isapprox(coords.dy, 4375.0; rtol=1e-14)
+        mk = st.markers
+        r = hypot.(mk.xm .- g.xcenter, mk.ym .- g.ycenter)
+        mk.dphi_sinter .= ifelse.(r .< g.rplanet - 2187.5, 0.02, 0.0)
+        res = Erebus.porous_shell_depth(st, coords, g)
+        @test res.nsector_used == 16
+        # Bins of max(dx, dy) / 2 give sector depths of 0 or 4375 m: neither type-7
+        # quartile of those is 2187.5 m
+        @test isapprox(res.q25, 2187.5; atol=1e-9)
+        @test isapprox(res.median, 2187.5; atol=1e-9)
+        @test isapprox(res.q75, 2187.5; atol=1e-9)
+        # nsector reaches the marker method
+        four = Erebus.porous_shell_depth(st, coords, g; nsector=4)
+        @test four.nsector_used == 4
+        @test isapprox(four.median, 2187.5; atol=1e-9)
+        # measure reaches it: phi_d > 0.4 down to R - 4375 m gives 4375 m
+        mk.phi_d .= ifelse.(r .< g.rplanet - 4375.0, 0.3, 0.45)
+        phi = Erebus.porous_shell_depth(st, coords, g; measure=:phi_gt_04)
+        @test isapprox(phi.median, 4375.0; atol=1e-9)
+        @test isapprox(phi.q25, 4375.0; atol=1e-9)
+        @test isapprox(Erebus.porous_shell_depth(st, coords, g).median, 2187.5; atol=1e-9)
+    end
+    @testset "Method on a state with dx < dy: bins of half the x spacing" begin
+        # 33 x 17 nodes: dx 4375 m, dy 8750 m, bins of min(dx, dy) / 2 = 2187.5 m. Rock
+        # below R - 2187.5 m is sintered: bin 1 is unsintered and bin 2 sintered in every
+        # sector, so each sector depth is 2187.5 m
+        cfg = _hk_cfg("grid.Nx" => 33)
+        st, coords, _ = _hk_state(cfg)
+        g = cfg.geometry
+        @test isapprox(coords.dx, 4375.0; rtol=1e-14)
+        @test isapprox(coords.dy, 8750.0; rtol=1e-14)
+        mk = st.markers
+        r = hypot.(mk.xm .- g.xcenter, mk.ym .- g.ycenter)
+        mk.dphi_sinter .= ifelse.(r .< g.rplanet - 2187.5, 0.02, 0.0)
+        res = Erebus.porous_shell_depth(st, coords, g)
+        @test res.nsector_used == 16
+        # Bins of dy / 2 give sector depths of 0 or 4375 m, whose type-7 lower quartile
+        # is 0, 3281.25 or 4375 m, never 2187.5 m
+        @test isapprox(res.q25, 2187.5; atol=1e-9)
+        @test isapprox(res.median, 2187.5; atol=1e-9)
+        @test isapprox(res.q75, 2187.5; atol=1e-9)
+    end
+    @testset "Non-finite rock markers and a radius beyond Float64 are domain errors" begin
+        xm, ym, tm, pg = _shell_markers(_shell_sharp(2.25dr))
+        # Marker 5 is a mantle marker (tm 1) of sector 1 in bin 1
+        @test tm[5] == 1
+        with_dphi(i, v) = Erebus.PorosityGroup(
+            pg.phi_d, pg.phi0, pg.tkm_max, (d=copy(pg.dphi_sinter); d[i]=v; d)
+        )
+        with_phi(i, v) = Erebus.PorosityGroup(
+            (p=copy(pg.phi_d); p[i]=v; p), pg.phi0, pg.tkm_max, pg.dphi_sinter
+        )
+        for bad in (NaN, Inf)
+            x_bad, y_bad = copy(xm), copy(ym)
+            x_bad[5] = bad
+            y_bad[5] = bad
+            @test_throws DomainError _shell(x_bad, ym, tm, pg)
+            @test_throws DomainError _shell(xm, y_bad, tm, pg)
+            # Only the measure in use is checked
+            @test_throws DomainError _shell(xm, ym, tm, with_dphi(5, bad))
+            @test isapprox(
+                _shell(xm, ym, tm, with_dphi(5, bad); measure=:phi_gt_04).median,
+                2dr;
+                atol=1e-12,
+            )
+            @test_throws DomainError _shell(
+                xm, ym, tm, with_phi(5, bad); measure=:phi_gt_04
+            )
+            @test isapprox(_shell(xm, ym, tm, with_phi(5, bad)).median, 2dr; atol=1e-12)
+            # An air marker (tm 3) with a non-finite position or value is not counted
+            tm_air = copy(tm)
+            tm_air[5] = 3
+            @test isapprox(
+                _shell(x_bad, ym, tm_air, with_dphi(5, bad)).median, 2dr; atol=1e-12
+            )
+        end
+        # A BigFloat radius or bin width beyond the Float64 range, above or below it
+        @test_throws DomainError _shell(xm, ym, tm, pg; R=big"1e400")
+        @test_throws DomainError _shell(xm, ym, tm, pg; dr=big"1e400")
+        @test_throws DomainError _shell(xm, ym, tm, pg; dr=big"1e-400")
+        # A BigFloat within the Float64 range gives the Float64 depth
+        @test isapprox(_shell(xm, ym, tm, pg; R=big"1.0").median, 2dr; atol=1e-12)
+    end
+    @testset "Argument guards" begin
+        xm, ym, tm, pg = _shell_markers(_shell_sharp(2.25dr))
+        @test_throws ArgumentError _shell(xm, ym, tm, nothing)
+        @test_throws ArgumentError _shell(xm, ym, tm, pg; nsector=0)
+        @test_throws ArgumentError _shell(xm, ym, tm, pg; measure=:other)
+        @test_throws ArgumentError _shell(xm[1:(end - 1)], ym, tm, pg)
+        for bad in (0.0, -1.0, NaN, Inf)
+            @test_throws DomainError _shell(xm, ym, tm, pg; dr=bad)
+            @test_throws DomainError _shell(xm, ym, tm, pg; R=bad)
+        end
+        @test_throws DomainError _shell(xm, ym, tm, pg; xc=NaN)
+        @test_throws DomainError _shell(xm, ym, tm, pg; yc=Inf)
+    end
+end
