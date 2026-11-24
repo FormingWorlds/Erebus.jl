@@ -151,22 +151,22 @@ A pass means that a point lies between the lines of its grid.
 <!-- VALIDATION_RECORD_START: porous_shell_suite -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `f0cec3dd`, config SHA-256 `bbebaa4bea8b`)
+**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `711a9bbf`, config SHA-256 `dde8ccf0bfb3`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `s65_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `5.2500e+03` | `4.5600e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
-| `s65_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `4.9800e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s65_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `5.2300e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `4.8750e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `2.6500e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `2.7900e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_225_025` | Median shell depth against the 1-D shell depth, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `2.6250e+03` | `2.3400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_225_025` | Relative L2 error of the binned peak temperature rise, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `2.8500e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_225_025` | Relative L2 error of the binned peak temperature rise, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `3.0700e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_175_010` | Median shell depth against the 1-D shell depth, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.4375e+03` | `2.1700e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_175_010` | Relative L2 error of the binned peak temperature rise, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.5600e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_175_010` | Relative L2 error of the binned peak temperature rise, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.7300e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_25_050` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `2.8125e+03` | `2.4400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_25_050` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `3.2500e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_050` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `3.4000e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_25_025_k` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `5.0625e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_25_025_k` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `4.4900e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_025_k` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `4.7700e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: porous_shell_suite -->
