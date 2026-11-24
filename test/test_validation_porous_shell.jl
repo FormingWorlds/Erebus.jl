@@ -1078,6 +1078,8 @@ end
             tampered["metrics"][i_tmax]["value"] += 0.01
             tampered["config"]["phi_init"] = 0.3
             tampered["metadata"]["config_sha256"] = repeat("0", 64)
+            # The replay runs only on the recorded Julia major.minor
+            tampered["metadata"]["julia_version"] = string(VERSION)
             t_path = write_porous_shell_toml(joinpath(tmpdir, "tampered.toml"), tampered)
             ok_t, errs_t = PSV.check_validation_reproducibility(bench, t_path)
             @test !ok_t
