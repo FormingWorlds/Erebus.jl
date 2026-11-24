@@ -42,7 +42,15 @@ Material properties, temperature, hydration state, and porosity are carried on t
    Heating has no such bound, because a heat source can raise a marker above its nodes. Sticky-air markers take the plain increment, because the next step resets them to the ambient temperature. When subgrid diffusion is on, the bound applies only to the part of the grid increment from the solve, so the relaxation and its counterpart in the grid increment can still exchange heat between markers.
 
 3. **Subgrid Diffusion**:
-   Subgrid diffusion damping for temperature and stress is available as a configurable option (`dsubgridt`, `dsubgrids`), set to zero (disabled) by default.
+   Subgrid diffusion relaxes marker temperatures (`dsubgridt`, default 1) and marker stresses (`dsubgrids`, default 0, off) toward the grid.
+   From the second step on, a marker takes only the grid increment $\Delta T$, so the difference between the marker temperature and the grid temperature at its position adds up over the steps.
+   Where sticky air shares a node with rock, or where the conductivity or heat capacity changes sharply, this difference can grow to hundreds of kelvin without subgrid diffusion.
+   When `dsubgridt > 0`, `apply_subgrid_temperature_diffusion!` corrects each rock marker by
+   $$\delta T_m = \left(T_m - T_{\text{grid}}(x_m, y_m)\right) \left[\exp\left(-d_{\text{subgridt}} \frac{k_m \Delta t}{(\rho c_p)_m} \, 2\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right)\right) - 1\right]$$
+   where $k_m$ and $(\rho c_p)_m$ are the marker conductivity and volumetric heat capacity of the step (with the latent heat term when melting is on), and $T_{\text{grid}}$ is the grid temperature of the step start at the marker.
+   The heat-capacity-weighted node mean of the corrections is subtracted from the grid increment, so the rock heat of the step does not change.
+   Sticky-air markers take no part, because the next step resets them to the ambient temperature.
+   Limits: the relaxation time is the diffusion time of one cell, so for low-conductivity rock on a coarse grid it removes only a small part of the difference at each step. In the porous shell case (dry porosity, $R_p$ = 20 km, 20 steps of 50 kyr) the largest difference is 32 K at Nx 65 and 84 K at Nx 33 (119 K and 146 K without subgrid diffusion). The weights are the 2-D bilinear weights, also under the spherical metric.
    When `dsubgrids > 0`, `apply_subgrid_stress_diffusion!` relaxes marker deviatoric stresses ($\sigma_{xx,m}, \sigma_{xy,m}$) toward interpolated staggered-grid stresses over the local Maxwell viscoelastic relaxation timescale $\tau_{\text{Maxwell},m} = \eta_{vp,m} / G_m$:
    $$\Delta \sigma_{\text{subgrid},m} = \left(\sigma_{\text{grid}}(x_m, y_m) - \sigma_m\right) \left[1 - \exp\left(-d_{\text{subgrids}} \frac{\Delta t \, G_m}{\eta_{vp,m}}\right)\right]$$
    where $\eta_{vp,m}$ is the marker viscoelastic viscosity (`etavpm`, falling back to the phase viscosity `etasolidm[tm]`) and $1 / G_m$ is the inverse marker shear modulus (`inv_gggtotalm[m]`, initialized from `gggsolidm[tm]`).

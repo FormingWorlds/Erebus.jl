@@ -177,5 +177,9 @@ end
         @test !isempty(drift)
         @test all(isfinite, drift)
         @test maximum(abs, drift) <= DRIFT_BOUND_K
+        # Bound: the heat exchange of the relaxation takes no rock marker below the
+        # space temperature, the lowest temperature of the case.
+        rock = findall(<(3), mk.core.tm)
+        @test minimum(mk.core.tkm[rock]) >= P.T_SPACE - 1.0e-9
     end
 end
