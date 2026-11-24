@@ -795,7 +795,11 @@ const PHYSICS_REGRESSION_BANDS = Dict{
 )
 
 const REPLAY_RTOL = 1.0e-6
-const REPLAY_ATOL_BOUNDS = Dict{String,Float64}("energy_lse_residual_nx65" => 1.0e-9)
+# The shell depth moves in whole radial bins (375 m at Nx 65): one marker across a bin edge
+# on another platform is round-off, so its replay allows one bin.
+const REPLAY_ATOL_BOUNDS = Dict{String,Float64}(
+    "shell_depth_nx65" => 375.0, "energy_lse_residual_nx65" => 1.0e-9
+)
 
 """
     make_case_config(; Nx=NX_REFERENCE, seed=SEED_DEFAULT)
