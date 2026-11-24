@@ -481,7 +481,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_momentum -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_momentum.toml` (Source commit `b80632a7`, config SHA-256 `2b1b6a1006ac`)
+**Validation record**: `benchmarks/records/spherical_momentum.toml` (Source commit `711a9bbf`, config SHA-256 `0e373ee6716e`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |

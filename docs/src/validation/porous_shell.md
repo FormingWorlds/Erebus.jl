@@ -260,13 +260,13 @@ Open symbols mark runs that reached the limit of 20 Myr while part of the body w
 <!-- VALIDATION_RECORD_START: porous_shell -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `f0cec3dd`, config SHA-256 `fcf41aa4e790`)
+**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `711a9bbf`, config SHA-256 `786b2e84a798`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `porous_shell_t2.5_phi0.25` | Median shell depth of the rock markers against the 1-D shell depth (Nx=65) | 65 | `5.2500e+03` | `4.5900e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
-| `porous_shell_t2.5_phi0.25` | Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65) | 65 | `4.9912e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `porous_shell_t2.5_phi0.25` | Scaled energy residual of the last thermal step (Nx=65) | 65 | `2.2975e-10` | `0.0000e+00` | `<= 1.00e-09` | dimensionless | **PASS** |
+| `porous_shell_t2.5_phi0.25` | Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65) | 65 | `5.1550e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `porous_shell_t2.5_phi0.25` | Scaled energy residual of the last thermal step (Nx=65) | 65 | `2.2720e-10` | `0.0000e+00` | `<= 1.00e-09` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: porous_shell -->

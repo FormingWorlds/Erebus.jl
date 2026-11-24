@@ -6,10 +6,10 @@
 id = "spherical_conduction"
 title = "Spherical Conduction and Radiogenic Heating Validation"
 page = "validation/thermal_conduction.md"
-src_commit = "79b0b41ce244743a00991c9b1be80d138188c3e0"
-timestamp_utc = "2026-11-14T08:05:53Z"
+src_commit = "711a9bbf51171dbc83ae0efae1cf6c3e413dda09"
+timestamp_utc = "2026-11-24T12:03:26Z"
 julia_version = "1.12.7"
-config_sha256 = "d87bff19da90599b8da039aabaec572dc05113083cc241380bf32fd0190fb9bf"
+config_sha256 = "3924f354de87353948d2a8ea14c34e9327796785339332f0c034736e5907611c"
 reference_type = "analytical_and_1d_fv"
 reference_citation = "Exact spherical Poisson solution and step-averaged backward-Euler Dirichlet eigenmode series cross-verified against a 1D spherical finite-volume solver"
 
@@ -112,7 +112,7 @@ id = "transient_center_dT_nx65"
 case = "transient"
 description = "Transient centre temperature rise dT(r_min) vs step-averaged BE reference (Nx=65)"
 nx = 65
-value = 4.9084228597417791e+02
+value = 4.9089938782199579e+02
 reference = 5.0707692944959467e+02
 atol = 2.5000000000000000e+01
 rtol = 5.0000000000000003e-02
@@ -125,7 +125,7 @@ id = "transient_profile_l2_rel_error_nx65"
 case = "transient"
 description = "Transient radial profile L2 relative error vs step-averaged BE reference (r <= R, Nx=65)"
 nx = 65
-value = 8.2866902112606111e-02
+value = 8.3357660860335317e-02
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-01
 rtol = 0.0000000000000000e+00
@@ -138,7 +138,7 @@ id = "transient_profile_l2_convergence_ratio_65_33"
 case = "transient"
 description = "Transient radial profile L2 convergence ratio L2(Nx=65) / L2(Nx=33)"
 nx = 65
-value = 4.2046873595125078e-01
+value = 4.2528161689932026e-01
 reference = 0.0000000000000000e+00
 atol = 5.9999999999999998e-01
 rtol = 0.0000000000000000e+00
@@ -151,7 +151,7 @@ id = "transient_max_air_shell_temperature_nx65"
 case = "transient"
 description = "Maximum sticky-air temperature in r >= R + dx (Nx=65)"
 nx = 65
-value = 1.7000000145152947e+02
+value = 1.7000000709820333e+02
 reference = 1.7000000000000000e+02
 atol = 1.0000000000000000e-02
 rtol = 0.0000000000000000e+00

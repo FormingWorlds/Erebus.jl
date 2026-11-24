@@ -6,10 +6,10 @@
 id = "spherical_compaction"
 title = "Spherical Compaction Validation"
 page = "validation/spherical_compaction.md"
-src_commit = "b80632a72404a380a8715d56c63f1be34c945a43"
-timestamp_utc = "2026-11-18T08:03:04Z"
+src_commit = "711a9bbf51171dbc83ae0efae1cf6c3e413dda09"
+timestamp_utc = "2026-11-24T12:03:57Z"
 julia_version = "1.12.7"
-config_sha256 = "6f5abeb4c387ad597490a776d03110687508fc8d4f918b311c641b09b09ff2e9"
+config_sha256 = "4b3bb81a6e4713de0f09ea841cb4432dea166939a091fbd83d24ea79421c82a9"
 reference_type = "analytical"
 reference_citation = "Exact compaction-length profile of the effective pressure in a sphere (d = 3) and a disk (d = 2) with fixed surface effective pressure, in the limit eta / zeta -> 0"
 
