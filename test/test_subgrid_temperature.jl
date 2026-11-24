@@ -429,6 +429,76 @@ end
         end
     end
 
+    @testset "redistributed heat counts toward the cold floor" begin
+        # Heat that a limited marker takes from its neighbours must not move them below their
+        # own floor plus conduction, and must not create heat.
+        coords = GridCoordinates(GridConfig(; Nx=51, Ny=51, xsize=5.0e4, ysize=5.0e4))
+        j0 = 25
+        function cell(tkm, k, offsets, dTc, dt)
+            n = length(tkm)
+            xm = coords.xp[j0] .+ offsets .* coords.dx
+            ym = fill(coords.yp[j0] + 0.5 * coords.dy, n)
+            rhocp = fill(3.3e6, n)
+            tkm = copy(tkm)
+            tkm_pre = copy(tkm)
+            tk1 = fill(290.0, coords.Ny1, coords.Nx1)
+            tk1[:, (j0 + 1):end] .= 1800.0
+            DTc = fill(dTc, size(tk1))
+            tk2 = tk1 .+ DTc
+            DT = copy(DTc)
+            TKSUM, RHOCPSUM = zeros(size(tk1)), zeros(size(tk1))
+            Erebus.apply_subgrid_temperature_diffusion!(
+                xm,
+                ym,
+                ones(Int, n),
+                tkm,
+                zeros(n),
+                tk1,
+                DT,
+                TKSUM,
+                RHOCPSUM,
+                dt,
+                n,
+                1;
+                coords=coords,
+                dsubgridt=1.0,
+                rhocptotalm=rhocp,
+                ktotalm=k,
+            )
+            stats = Erebus.limit_marker_temperature_increment!(
+                xm,
+                ym,
+                ones(Int, n),
+                tkm,
+                rhocp,
+                DT,
+                tk2,
+                TKSUM,
+                RHOCPSUM,
+                n;
+                coords=coords,
+                DT_conduction=DTc,
+                tkm_floor=tkm_pre,
+                tk_floor=tk1,
+            )
+            Erebus.update_marker_temperature!(xm, ym, tkm, DT, tk2, 2, n; coords=coords)
+            return tkm, stats
+        end
+        # A marker colder than its nodes gives the subgrid heat back down to its own floor.
+        t, stats = cell([290.0, 200.0], [0.5, 5.0], [0.02, 0.48], 0.0, 1.0e11)
+        @test isapprox(t, [290.0, 200.0]; rtol=1e-10)
+        @test stats.heat_lost == 0.0
+        # Three markers: every marker keeps its conduction warming, and only that is added.
+        for dTc in (50.0, 150.0)
+            t, stats = cell(
+                fill(290.0, 3), [0.5, 2.0, 5.0], [0.02, 0.31, 0.48], dTc, 1.0e12
+            )
+            @test minimum(t) >= 290.0 + dTc - 1e-9
+            @test isapprox(sum(t), 3 * (290.0 + dTc); rtol=1e-12)
+            @test stats.heat_lost == 0.0
+        end
+    end
+
     @testset "the cold floor needs both inputs of the right size" begin
         coords = GridCoordinates(GridConfig(; Nx=10, Ny=10, xsize=1.0e5, ysize=1.0e5))
         sz = (coords.Ny1, coords.Nx1)

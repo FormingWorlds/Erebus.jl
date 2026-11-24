@@ -45,6 +45,7 @@ Material properties, temperature, hydration state, and porosity are carried on t
    That part stops at the floor $T_\text{floor} = \min(T_m^{\text{start}}, T_\text{nodes}^{\text{start}})$.
    Here $T_m^{\text{start}}$ is the marker temperature before subgrid diffusion, and $T_\text{nodes}^{\text{start}}$ are its node temperatures at the step start.
    The increment from the solve then acts on top of the floor, with the bound above.
+   Cooling that the redistribution moves to a marker counts toward its floor, so a receiving marker also keeps its solve increment above the floor.
    The relaxation can still move a hot marker down to its nodes.
    Where this floor acts in a cell whose rock markers are all at their floor, the rejected cooling has no receiver and is not delivered, as above.
 

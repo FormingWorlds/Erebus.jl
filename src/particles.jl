@@ -4851,6 +4851,8 @@ function limit_marker_temperature_increment!(
         end
         T_base = tkm[m] + (increment - dTc)
         if tkm_floor !== nothing
+            # heat already moved by the redistribution counts toward the floor
+            T_base += correction[m]
             T_floor = min(tkm_floor[m], minimum(grid_vector(i, j, tk_floor)))
             # the subgrid part stops at the floor; the solve increment acts on top of it
             if T_base < T_floor

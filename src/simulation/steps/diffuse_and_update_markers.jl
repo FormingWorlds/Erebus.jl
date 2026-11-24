@@ -180,13 +180,15 @@ end
 
 """
 Relax rock marker temperatures toward the grid (subgrid diffusion) and limit the cooling of
-the grid increment, with the marker temperatures before the relaxation as the cold floor.
+the grid increment. The cold floor of a marker is the lower of its temperature before the
+relaxation and the start temperatures `tk1` of its nodes.
 
 $(SIGNATURES)
 
 # Arguments
 
-    - state: simulation state; marker temperatures and the grid increment `DT` change
+    - state: simulation state; marker temperatures and the grid increment `DT` change;
+      `state.grids.DT0` must hold the solve increment
     - coords: grid coordinates
     - cfg: configuration (`solver.dsubgridt`, `geometry.spherical_metric`)
     - TKSUM, RHOCPSUM: scratch arrays at P nodes
@@ -197,8 +199,9 @@ $(SIGNATURES)
 
 # Notes
 
-The relaxation and the floor act from step 2 with a positive time step; step 1 sets the
-markers from the grid.
+The relaxation runs at every step with a positive time step. The limit and the floor act
+from step 2; at step 1 the markers take the grid temperature, so the relaxation has no effect
+on them.
 """
 function _relax_and_limit_marker_temperatures!(
     state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig, TKSUM, RHOCPSUM
