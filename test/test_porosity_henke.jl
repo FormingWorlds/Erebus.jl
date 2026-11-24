@@ -2112,6 +2112,12 @@ end
         ]
         Erebus.save_state(args...; coords=coords2, cfg=cfg, porosity_props=pg)
         data_pos = Erebus.JLD2.load(joinpath(dir_pos, "output_00003.jld2"))
+        # Without a configuration the writer stores the solver default of dsubgridt (1)
+        args[1] = mktempdir() * "/"
+        Erebus.save_state(args...; coords=coords2, cfg=nothing, porosity_props=pg)
+        data_nocfg = Erebus.JLD2.load(joinpath(args[1], "output_00003.jld2"))
+        @test isapprox(data_nocfg["dsubgridt"], 1.0; rtol=1e-12)
+        @test !isapprox(data_nocfg["dsubgridt"], 0.0; atol=1e-3)
         for fn in fieldnames(Erebus.PorosityGroup)
             @test isapprox(data_pos[string(fn)], getfield(pg, fn); rtol=0, atol=0)
         end

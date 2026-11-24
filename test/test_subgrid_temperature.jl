@@ -67,6 +67,26 @@ end
 
 @testset "Subgrid temperature diffusion" begin
     @testset "default relaxation factor is 1" begin
+        # The keyword default of the function is the same factor: it relaxes.
+        c = _subgrid_cell(; n_air=0)
+        tkm = copy(c.tkm)
+        Erebus.apply_subgrid_temperature_diffusion!(
+            c.xm,
+            c.ym,
+            c.tm,
+            tkm,
+            zeros(c.n),
+            c.tk1,
+            zeros(size(c.tk1)),
+            zeros(size(c.tk1)),
+            zeros(size(c.tk1)),
+            3.0e12,
+            c.n,
+            1;
+            coords=c.coords,
+            phi_dry=zeros(c.n),
+        )
+        @test !isapprox(tkm, c.tkm; rtol=1e-6)
         @test isapprox(SolverConfig().dsubgridt, 1.0; rtol=1e-12)
         # Scale guard: a factor of 10 or 0.1 is not the default.
         @test !isapprox(SolverConfig().dsubgridt, 10.0; rtol=1e-3)
