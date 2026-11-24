@@ -4616,25 +4616,42 @@ $(SIGNATURES)
 
 # Details
 
-    - xm: marker x-coordinates 
-	- ym: marker y-coordinates
-	- tm: marker type
-	- tkm: marker temperature
+A rock marker takes only the grid increment from step 2 on, so the difference between
+its temperature and the grid temperature at its position adds up over the steps. This
+step relaxes that difference by the factor
+`exp(-dsubgridt * k * dt / rhocp * 2 (1/dx^2 + 1/dy^2)) - 1` and subtracts the
+heat-capacity-weighted node mean of the corrections from `DT`, so the rock heat of the
+step is unchanged. Sticky-air markers take no part: the next step resets them to the
+ambient temperature, so heat given to them would be lost. The weights are the 2-D
+bilinear weights, also under the spherical metric.
+
+    - xm: marker x-coordinates
+    - ym: marker y-coordinates
+    - tm: marker type
+    - tkm: marker temperature
     - phim: marker porosity
     - tk1: current temperature at P nodes
-	- DT: temperature change at P nodes
-	- TKSUM: interpolation of TK at P nodes 
-	- RHOCPSUM: interpolation of RHOCP at P nodes
-    - dt: computational time step
-	- marknum: total number of markers in use
+    - DT: temperature change at P nodes
+    - TKSUM: interpolation of TK at P nodes
+    - RHOCPSUM: interpolation of RHOCP at P nodes
+    - dt: computational time step [s]
+    - marknum: total number of markers in use
     - mode: marker property computation mode
         - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
              Travis and Schubert, 2005)
         - 2: constant parameter rhocpfluidm
+    - dsubgridt: relaxation factor, 0 switches the step off
+    - phi_dry: dry porosity of the markers (Henke et al. 2012), or `nothing`
+    - rhocptotalm, ktotalm: marker volumetric heat capacity and conductivity of the step;
+      an entry that is not positive, or `nothing`, uses the constitutive value
 
 # Returns
 
     - nothing
+
+# Throws
+
+    - `DomainError`: if `dsubgridt` or `dt` is negative or not finite
 """
 function apply_subgrid_temperature_diffusion!(
     xm,
@@ -4650,10 +4667,15 @@ function apply_subgrid_temperature_diffusion!(
     marknum,
     mode;
     coords::GridCoordinates=default_grid_coordinates(),
-    dsubgridt::Real=dsubgridt,
+    dsubgridt::Real=1.0,
     phi_dry=nothing,
+    rhocptotalm=nothing,
+    ktotalm=nothing,
 )
-    # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
+    (isfinite(dsubgridt) && dsubgridt >= 0.0) ||
+        throw(DomainError(dsubgridt, "dsubgridt must be finite and non-negative"))
+    (isfinite(dt) && dt >= 0.0) ||
+        throw(DomainError(dt, "dt must be finite and non-negative"))
     if dsubgridt == 0.0
         return nothing
     end
@@ -4664,6 +4686,8 @@ function apply_subgrid_temperature_diffusion!(
     RHOCPSUM .= 0.0
     # iterate over markers
     for m in 1:1:marknum
+        # sticky air is reset each step, so it neither relaxes nor takes heat
+        @inbounds tm[m] < 3 || continue
         @inbounds i, j, weights = fix_weights(
             xm[m],
             ym[m],
@@ -4679,32 +4703,30 @@ function apply_subgrid_temperature_diffusion!(
         # compute marker-node temperature difference
         @inbounds δtkm = tkm[m] - dot4(grid_vector(i, j, tk1), weights)
         # compute marker properties
-        @inbounds if tm[m] < 3 && phi_dry !== nothing
+        @inbounds if phi_dry !== nothing
             # dry porous rock (Henke et al. 2012)
-            rhocptotalm = rhocpsolidm[tm[m]] * (1.0 - phi_dry[m])
-            ktotalm = k_porous(compute_ksolidm(tkm[m], mode), phi_dry[m])
-        elseif tm[m] < 3
-            # rocks
-            @inbounds rhocptotalm = total(
-                rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m]
-            )
-            @inbounds ktotalm = ktotal(
+            rhocp_c = rhocpsolidm[tm[m]] * (1.0 - phi_dry[m])
+            k_c = k_porous(compute_ksolidm(tkm[m], mode), phi_dry[m])
+        else
+            rhocp_c = total(rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
+            k_c = ktotal(
                 compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m]
             )
-        else
-            # sticky air
-            @inbounds rhocptotalm = rhocpsolidm[tm[m]]
-            @inbounds ktotalm = ksolidm[tm[m]]
         end
+        # the marker values of the step (latent heat, k_eff) when given
+        @inbounds rhocp_m =
+            (rhocptotalm !== nothing && rhocptotalm[m] > 0.0) ? rhocptotalm[m] : rhocp_c
+        @inbounds k_m = (ktotalm !== nothing && ktotalm[m] > 0.0) ? ktotalm[m] : k_c
         # time-relax δtkm difference
         δtkm *= (
-            exp(-dsubgridt*ktotalm*dt/rhocptotalm*(2.0*(inv(dx_val^2)+inv(dy_val^2)))) - 1.0
+            exp(-dsubgridt * k_m * dt / rhocp_m * (2.0 * (inv(dx_val^2) + inv(dy_val^2)))) -
+            1.0
         )
         # correct marker temperature
         @inbounds tkm[m] += δtkm
         # update subgrid diffusion on P nodes
-        interpolate_add_to_grid!(i, j, weights, δtkm*rhocptotalm, TKSUM)
-        interpolate_add_to_grid!(i, j, weights, rhocptotalm, RHOCPSUM)
+        interpolate_add_to_grid!(i, j, weights, δtkm * rhocp_m, TKSUM)
+        interpolate_add_to_grid!(i, j, weights, rhocp_m, RHOCPSUM)
     end
     # compute DTsubgrid=TKSUM/RHOCPSUM and update temperature field at P nodes
     for j in 1:1:Nx1, i in 1:1:Ny1
