@@ -164,8 +164,12 @@ using Erebus
 
     @testset "Marker Temperature Range in the Post-Convergence Update" begin
         # Equal marker weights, so the heat budget below is a plain sum.
+        # Subgrid relaxation off: this testset checks the limit alone.
         cfg = override_config(
-            default_config(), Dict{String,Any}("geometry.spherical_metric" => false)
+            default_config(),
+            Dict{String,Any}(
+                "geometry.spherical_metric" => false, "solver.dsubgridt" => 0.0
+            ),
         )
         state, coords_actual, ws, _, _ = init_simulation(cfg)
         core = state.markers.core
@@ -219,8 +223,12 @@ using Erebus
     end
 
     @testset "Marker Temperature Range under the Spherical Metric" begin
+        # Subgrid relaxation off: this testset checks the limit alone.
         cfg = override_config(
-            default_config(), Dict{String,Any}("geometry.spherical_metric" => true)
+            default_config(),
+            Dict{String,Any}(
+                "geometry.spherical_metric" => true, "solver.dsubgridt" => 0.0
+            ),
         )
         state, coords_actual, ws, _, _ = init_simulation(cfg)
         core = state.markers.core
