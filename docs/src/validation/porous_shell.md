@@ -179,7 +179,7 @@ In the main case the outermost 3 bins, from 19.5 to 20 km, reached only 290.0 to
 With the matched air they reached 295.0 to 327.3 K, and in the 1-D model 301.7 to 358.3 K.
 With this value the shell of the main case is 5062.5 m deep, 1.34 cells deeper than in the 1-D model, against 0.84 cells with the matched air.
 The CI case and 5 of the 6 runs therefore give the air the conductivity of the porous surface rock.
-A configuration file also gives the air a heat capacity of $3 \times 10^{6}$ J/(m³ K), less than that of rock; we have not measured the shell of such a run.
+By default a configuration file gives the air a heat capacity of $3 \times 10^{6}$ J/(m³ K), less than that of solid rock; we have not measured the shell with that default.
 
 !!! details "Test details"
     - Reference: `solve_porous_sphere`, through `run_porous_shell_case` in `benchmarks/validation_porous_shell.jl`.
