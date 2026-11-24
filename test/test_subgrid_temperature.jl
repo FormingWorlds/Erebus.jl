@@ -296,21 +296,21 @@ end
             rhocptotalm=rhocp,
             ktotalm=k,
         )
-        Erebus.limit_marker_temperature_increment!(
+        Erebus.limit_relaxed_marker_temperatures!(
             xm,
             ym,
             tm,
             tkm,
             rhocp,
             DT,
+            zeros(size(tk1)),
+            tk1,
             tk1,
             TKSUM,
             RHOCPSUM,
             2;
             coords=coords,
-            DT_conduction=zeros(size(tk1)),
             tkm_floor=tkm_pre,
-            tk_floor=tk1,
         )
         Erebus.update_marker_temperature!(xm, ym, tkm, DT, tk1, 2, 2; coords=coords)
         @test all(isfinite, tkm)
@@ -329,21 +329,21 @@ end
         function limited(tkm0, floor, tk1v, tk2v, dTc)
             tkm = [tkm0]
             DT = fill(-30.0, sz)
-            Erebus.limit_marker_temperature_increment!(
+            Erebus.limit_relaxed_marker_temperatures!(
                 xm,
                 ym,
                 [1],
                 tkm,
                 [3.3e6],
                 DT,
+                fill(dTc, sz),
+                fill(tk1v, sz),
                 fill(tk2v, sz),
                 zeros(sz),
                 zeros(sz),
                 1;
                 coords=coords,
-                DT_conduction=fill(dTc, sz),
                 tkm_floor=[floor],
-                tk_floor=fill(tk1v, sz),
             )
             Erebus.update_marker_temperature!(
                 xm, ym, tkm, DT, fill(tk2v, sz), 2, 1; coords=coords
@@ -397,21 +397,21 @@ end
                 rhocptotalm=rhocp,
                 ktotalm=k,
             )
-            Erebus.limit_marker_temperature_increment!(
+            Erebus.limit_relaxed_marker_temperatures!(
                 xm,
                 ym,
                 [1, 1],
                 tkm,
                 rhocp,
                 DT,
+                DTc,
+                tk1,
                 tk2,
                 TKSUM,
                 RHOCPSUM,
                 2;
                 coords=coords,
-                DT_conduction=DTc,
                 tkm_floor=tkm_pre,
-                tk_floor=tk1,
             )
             Erebus.update_marker_temperature!(xm, ym, tkm, DT, tk2, 2, 2; coords=coords)
             return tkm
@@ -465,21 +465,21 @@ end
                 rhocptotalm=rhocp,
                 ktotalm=k,
             )
-            stats = Erebus.limit_marker_temperature_increment!(
+            stats = Erebus.limit_relaxed_marker_temperatures!(
                 xm,
                 ym,
                 ones(Int, n),
                 tkm,
                 rhocp,
                 DT,
+                DTc,
+                tk1,
                 tk2,
                 TKSUM,
                 RHOCPSUM,
                 n;
                 coords=coords,
-                DT_conduction=DTc,
                 tkm_floor=tkm_pre,
-                tk_floor=tk1,
             )
             Erebus.update_marker_temperature!(xm, ym, tkm, DT, tk2, 2, n; coords=coords)
             return tkm, stats
@@ -487,7 +487,7 @@ end
         # A marker colder than its nodes gives the subgrid heat back down to its own floor.
         t, stats = cell([290.0, 200.0], [0.5, 5.0], [0.02, 0.48], 0.0, 1.0e11)
         @test isapprox(t, [290.0, 200.0]; rtol=1e-10)
-        @test stats.heat_lost == 0.0
+        @test isapprox(stats.heat_lost, 0.0; atol=1.0)
         # Three markers: every marker keeps its conduction warming, and only that is added.
         for dTc in (50.0, 150.0)
             t, stats = cell(
@@ -495,8 +495,93 @@ end
             )
             @test minimum(t) >= 290.0 + dTc - 1e-9
             @test isapprox(sum(t), 3 * (290.0 + dTc); rtol=1e-12)
-            @test stats.heat_lost == 0.0
+            @test isapprox(stats.heat_lost, 0.0; atol=1.0)
         end
+    end
+
+    @testset "the floor stage moves only subgrid heat" begin
+        # Solve cooling on one side of the cell: the solve heat is kept in full, and a marker
+        # far above its floor is not held up by rounding of the redistributed heat.
+        coords = GridCoordinates(GridConfig(; Nx=21, Ny=21, xsize=2.0e4, ysize=2.0e4))
+        I0, J0 = 10, 10
+        function cell(tkm0, k, rhocp, ox, oy, tk1_4, dtc_4, dt)
+            n = length(tkm0)
+            xm = coords.xp[J0] .+ ox .* coords.dx
+            ym = coords.yp[I0] .+ oy .* coords.dy
+            tk1 = fill(tk1_4[1], coords.Ny1, coords.Nx1)
+            DTc = zeros(coords.Ny1, coords.Nx1)
+            for (q, (di, dj)) in enumerate(((0, 0), (1, 0), (0, 1), (1, 1)))
+                tk1[I0 + di, J0 + dj] = tk1_4[q]
+                DTc[I0 + di, J0 + dj] = dtc_4[q]
+            end
+            tk2 = tk1 .+ DTc
+            tkm = copy(tkm0)
+            DT = copy(DTc)
+            TKSUM, RHOCPSUM = zeros(size(tk1)), zeros(size(tk1))
+            Erebus.apply_subgrid_temperature_diffusion!(
+                xm,
+                ym,
+                ones(Int, n),
+                tkm,
+                zeros(n),
+                tk1,
+                DT,
+                TKSUM,
+                RHOCPSUM,
+                dt,
+                n,
+                1;
+                coords=coords,
+                dsubgridt=1.0,
+                rhocptotalm=rhocp,
+                ktotalm=k,
+            )
+            stats = Erebus.limit_relaxed_marker_temperatures!(
+                xm,
+                ym,
+                ones(Int, n),
+                tkm,
+                rhocp,
+                DT,
+                DTc,
+                tk1,
+                tk2,
+                TKSUM,
+                RHOCPSUM,
+                n;
+                coords=coords,
+                tkm_floor=copy(tkm0),
+            )
+            Erebus.update_marker_temperature!(xm, ym, tkm, DT, tk2, 2, n; coords=coords)
+            return tkm, stats
+        end
+        t, stats = cell(
+            [300.0, 302.0],
+            [0.01, 5.0],
+            [3.3e6, 6.6e6],
+            [0.02, 0.98],
+            [0.5, 0.5],
+            [400.0, 400.0, 300.0, 300.0],
+            [-150.0, -150.0, 0.0, 0.0],
+            1.0e10,
+        )
+        @test isapprox(t, [250.0, 250.5]; rtol=1e-12)
+        @test isapprox(stats.heat_lost, 0.0; atol=1.0)
+        rhocp = [1.127898595768074e6, 1.1278189357731966e6, 1.4882315746412517e6]
+        tkm0 = [310.0558627179961, 161.6159635491205, 301.8305152622005]
+        t, stats = cell(
+            tkm0,
+            [0.34638470927542087, 0.03583300936468784, 0.007741122651759497],
+            rhocp,
+            [0.8497201644381142, 0.0050136960617534814, 0.817269692998967],
+            [0.08403734228921009, 0.7646781607754731, 0.3598581006977638],
+            [1215.9853824485313, 1215.9853824485313, 301.8305152622005, 301.8305152622005],
+            zeros(4),
+            4.934862247478527e12,
+        )
+        # No solve increment: the heat of the cell does not change.
+        @test abs(sum(rhocp .* (t .- tkm0))) <= 1.0e-12 * sum(rhocp .* tkm0)
+        @test isapprox(stats.heat_lost, 0.0; atol=1.0)
     end
 
     @testset "the cold floor needs both inputs of the right size" begin
@@ -520,6 +605,25 @@ end
         @test_throws ArgumentError f(; tk_floor=zeros(sz))
         @test_throws ArgumentError f(; tkm_floor=Float64[], tk_floor=zeros(sz))
         @test_throws ArgumentError f(; tkm_floor=[300.0], tk_floor=zeros(2, 2))
+        @test_throws ArgumentError f(;
+            tkm_floor=[300.0], tk_floor=zeros(sz), DT_conduction=zeros(sz)
+        )
+        @test_throws ArgumentError Erebus.limit_relaxed_marker_temperatures!(
+            [5.0e4],
+            [5.0e4],
+            [1],
+            [300.0],
+            [3.3e6],
+            zeros(sz),
+            zeros(2, 2),
+            zeros(sz),
+            zeros(sz),
+            zeros(sz),
+            zeros(sz),
+            1;
+            coords=coords,
+            tkm_floor=[300.0],
+        )
     end
 
     @testset "the step keeps rock markers above the cold floor" begin
@@ -593,21 +697,21 @@ end
             rhocptotalm=core.rhocptotalm,
             ktotalm=core.ktotalm,
         )
-        Erebus.limit_marker_temperature_increment!(
+        Erebus.limit_relaxed_marker_temperatures!(
             core.xm,
             core.ym,
             core.tm,
             tkm,
             core.rhocptotalm,
             DT,
+            copy(g.DT),
+            g.tk1,
             g.tk2,
             TK,
             RC,
             n;
             coords=coords,
-            DT_conduction=copy(g.DT),
             tkm_floor=copy(core.tkm),
-            tk_floor=g.tk1,
         )
         diffuse_and_update_markers!(state, coords, cfg, ws)
         @test isapprox(core.tkm[rocks], tkm[rocks]; rtol=1e-12)

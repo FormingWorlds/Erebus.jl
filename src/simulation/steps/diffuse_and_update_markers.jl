@@ -199,9 +199,10 @@ $(SIGNATURES)
 
 # Notes
 
-The relaxation runs at every step with a positive time step. The limit and the floor act
-from step 2; at step 1 the markers take the grid temperature, so the relaxation has no effect
-on them.
+The relaxation runs when `solver.dsubgridt > 0` and the time step is positive. From step 2
+the limit acts: in two stages with the cold floor when the relaxation runs
+(`limit_relaxed_marker_temperatures!`), else in one stage without it. At step 1 the marker
+update takes the grid temperature, so the relaxation changes only the grid increment `DT`.
 """
 function _relax_and_limit_marker_temperatures!(
     state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig, TKSUM, RHOCPSUM
@@ -232,22 +233,40 @@ function _relax_and_limit_marker_temperatures!(
     )
     # The first step sets markers from the grid, without an increment.
     state.timestep > 1 || return nothing
-    limit_marker_temperature_increment!(
-        core.xm,
-        core.ym,
-        core.tm,
-        core.tkm,
-        core.rhocptotalm,
-        g.DT,
-        g.tk2,
-        TKSUM,
-        RHOCPSUM,
-        marknum;
-        coords=coords,
-        DT_conduction=subgrid_on ? g.DT0 : g.DT,
-        w3d=cfg.geometry.spherical_metric ? core.w3d_m : nothing,
-        tkm_floor=tkm_pre,
-        tk_floor=subgrid_on ? g.tk1 : nothing,
-    )
+    w3d = cfg.geometry.spherical_metric ? core.w3d_m : nothing
+    if subgrid_on
+        limit_relaxed_marker_temperatures!(
+            core.xm,
+            core.ym,
+            core.tm,
+            core.tkm,
+            core.rhocptotalm,
+            g.DT,
+            g.DT0,
+            g.tk1,
+            g.tk2,
+            TKSUM,
+            RHOCPSUM,
+            marknum;
+            coords=coords,
+            tkm_floor=tkm_pre,
+            w3d=w3d,
+        )
+    else
+        limit_marker_temperature_increment!(
+            core.xm,
+            core.ym,
+            core.tm,
+            core.tkm,
+            core.rhocptotalm,
+            g.DT,
+            g.tk2,
+            TKSUM,
+            RHOCPSUM,
+            marknum;
+            coords=coords,
+            w3d=w3d,
+        )
+    end
     return nothing
 end
