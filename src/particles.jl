@@ -4767,13 +4767,13 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
     - CAPACITY: scratch array at P nodes for the heat capacity of the receiving markers
     - marknum: total number of markers in use
     - DT_conduction: the part of `DT` from the solve; the rest of `DT` is the counterpart of
-      subgrid diffusion, which the bound does not limit
+      subgrid diffusion, which the bound limits only through `tkm_floor` and `tk_floor`
     - w3d: marker out-of-plane length under the spherical metric [m], or `nothing` for
       equal weights
     - tkm_floor, tk_floor: marker temperatures before subgrid diffusion and the node
-      temperatures of the step start; when given, a rock marker must not fall below
-      `min(tkm_floor[m], min(tk_floor nodes), min(tk2 nodes))`, so the heat exchange of
-      subgrid diffusion cannot cool it below its own start or its nodes
+      temperatures of the step start; when given, the level that the solve part may not
+      cool below is raised to at least `min(tkm_floor[m], min(tk_floor nodes))`, so the
+      subgrid counterpart cannot cool a marker below its own start or its nodes
 
 # Returns
 
@@ -4844,14 +4844,13 @@ function limit_marker_temperature_increment!(
     @inline function marker_range(m, i, j, weights)
         increment = dot4(grid_vector(i, j, DT), weights)
         T_new = tkm[m] + correction[m] + increment
-        if tkm_floor !== nothing
-            # floor of the step: the marker before subgrid diffusion and its nodes
-            T_floor = min(tkm_floor[m], minimum(grid_vector(i, j, tk_floor)))
-            return T_new, min(T_floor, minimum(grid_vector(i, j, tk2)))
-        end
         T_base = tkm[m]
         if DT_conduction !== DT
             T_base += increment - dot4(grid_vector(i, j, DT_conduction), weights)
+        end
+        if tkm_floor !== nothing
+            # the subgrid part must not take the marker below its start or its nodes
+            T_base = max(T_base, min(tkm_floor[m], minimum(grid_vector(i, j, tk_floor))))
         end
         return T_new, min(T_base, minimum(grid_vector(i, j, tk2)))
     end

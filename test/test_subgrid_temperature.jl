@@ -303,6 +303,67 @@ end
         @test tkm[2] >= tkm[1]
     end
 
+    @testset "each term of the cold floor can set the bound" begin
+        coords = GridCoordinates(GridConfig(; Nx=10, Ny=10, xsize=1.0e5, ysize=1.0e5))
+        sz = (coords.Ny1, coords.Nx1)
+        xm, ym = [0.5 * coords.xsize + 10.0], [0.5 * coords.ysize + 10.0]
+        function limited(tkm0, floor, tk1v, tk2v, dTc)
+            tkm = [tkm0]
+            DT = fill(-30.0, sz)
+            Erebus.limit_marker_temperature_increment!(
+                xm,
+                ym,
+                [1],
+                tkm,
+                [3.3e6],
+                DT,
+                fill(tk2v, sz),
+                zeros(sz),
+                zeros(sz),
+                1;
+                coords=coords,
+                DT_conduction=fill(dTc, sz),
+                tkm_floor=[floor],
+                tk_floor=fill(tk1v, sz),
+            )
+            Erebus.update_marker_temperature!(
+                xm, ym, tkm, DT, fill(tk2v, sz), 2, 1; coords=coords
+            )
+            return tkm[1]
+        end
+        # The start of the marker is the lowest term: 260 - 30 stops at 250.
+        @test isapprox(limited(260.0, 250.0, 300.0, 300.0, 0.0), 250.0; rtol=1e-12)
+        # The start node temperature is the lowest term: 280 - 30 stops at 270.
+        @test isapprox(limited(280.0, 400.0, 270.0, 300.0, 0.0), 270.0; rtol=1e-12)
+        # Conduction cooling stops at the end node temperature, 280.
+        @test isapprox(limited(300.0, 400.0, 400.0, 280.0, -30.0), 280.0; rtol=1e-12)
+        # Without a floor, the subgrid part is not limited: 260 - 30 = 230.
+        @test isapprox(limited(260.0, 100.0, 100.0, 300.0, 0.0), 230.0; rtol=1e-12)
+    end
+
+    @testset "the cold floor needs both inputs of the right size" begin
+        coords = GridCoordinates(GridConfig(; Nx=10, Ny=10, xsize=1.0e5, ysize=1.0e5))
+        sz = (coords.Ny1, coords.Nx1)
+        f(; kw...) = Erebus.limit_marker_temperature_increment!(
+            [5.0e4],
+            [5.0e4],
+            [1],
+            [300.0],
+            [3.3e6],
+            zeros(sz),
+            zeros(sz),
+            zeros(sz),
+            zeros(sz),
+            1;
+            coords=coords,
+            kw...,
+        )
+        @test_throws ArgumentError f(; tkm_floor=[300.0])
+        @test_throws ArgumentError f(; tk_floor=zeros(sz))
+        @test_throws ArgumentError f(; tkm_floor=Float64[], tk_floor=zeros(sz))
+        @test_throws ArgumentError f(; tkm_floor=[300.0], tk_floor=zeros(2, 2))
+    end
+
     @testset "the step keeps rock markers above the cold floor" begin
         cfg = override_config(
             default_config(), Dict{String,Any}("geometry.spherical_metric" => false)

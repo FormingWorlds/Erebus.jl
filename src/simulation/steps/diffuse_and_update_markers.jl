@@ -173,8 +173,24 @@ function diffuse_and_update_markers!(
         DS33=s33_kw.DS33,
     )
 
-    # marker temperatures before subgrid diffusion: the cold floor of the limit below
-    subgrid_on = cfg.solver.dsubgridt > 0.0 && state.timestep > 1
+    _relax_and_limit_marker_temperatures!(state, coords, cfg, TKSUM, RHOCPSUM)
+
+    return nothing
+end
+
+"""
+Relax rock marker temperatures toward the grid (subgrid diffusion) and limit the cooling of
+the grid increment, with the marker temperatures before the relaxation as the cold floor.
+
+$(SIGNATURES)
+"""
+function _relax_and_limit_marker_temperatures!(
+    state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig, TKSUM, RHOCPSUM
+)
+    g = state.grids
+    core = state.markers.core
+    marknum = length(state.markers)
+    subgrid_on = cfg.solver.dsubgridt > 0.0 && state.dt > 0.0 && state.timestep > 1
     tkm_pre = subgrid_on ? core.tkm[1:marknum] : nothing
     apply_subgrid_temperature_diffusion!(
         core.xm,
@@ -195,27 +211,24 @@ function diffuse_and_update_markers!(
         rhocptotalm=core.rhocptotalm,
         ktotalm=core.ktotalm,
     )
-
     # The first step sets markers from the grid, without an increment.
-    if state.timestep > 1
-        limit_marker_temperature_increment!(
-            core.xm,
-            core.ym,
-            core.tm,
-            core.tkm,
-            core.rhocptotalm,
-            g.DT,
-            g.tk2,
-            TKSUM,
-            RHOCPSUM,
-            marknum;
-            coords=coords,
-            DT_conduction=cfg.solver.dsubgridt > 0.0 ? g.DT0 : g.DT,
-            w3d=cfg.geometry.spherical_metric ? core.w3d_m : nothing,
-            tkm_floor=tkm_pre,
-            tk_floor=subgrid_on ? g.tk1 : nothing,
-        )
-    end
-
+    state.timestep > 1 || return nothing
+    limit_marker_temperature_increment!(
+        core.xm,
+        core.ym,
+        core.tm,
+        core.tkm,
+        core.rhocptotalm,
+        g.DT,
+        g.tk2,
+        TKSUM,
+        RHOCPSUM,
+        marknum;
+        coords=coords,
+        DT_conduction=cfg.solver.dsubgridt > 0.0 ? g.DT0 : g.DT,
+        w3d=cfg.geometry.spherical_metric ? core.w3d_m : nothing,
+        tkm_floor=tkm_pre,
+        tk_floor=subgrid_on ? g.tk1 : nothing,
+    )
     return nothing
 end

@@ -208,6 +208,9 @@ using Erebus
             core = state.markers.core
             rocks = findall(<(3), core.tm)
             core.rhocptotalm[rocks] .= 3.0e6
+            # Equal conductivity: no marker relaxes less than the node mean, so the cold
+            # floor of the step does not act.
+            core.ktotalm[rocks] .= 3.0
             core.tkm[rocks] .= 100.0
             state.grids.tk1 .= 300.0
             state.grids.tk2 .= 300.0
