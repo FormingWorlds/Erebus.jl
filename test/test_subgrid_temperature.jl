@@ -493,7 +493,8 @@ end
         core.rhocptotalm[rocks] .= 3.3e6
         core.ktotalm[rocks] .= range(0.5, 5.0; length=length(rocks))
         core.tkm[rocks] .= 290.0
-        g.tk1 .= 290.0
+        # Markers start below all nodes, so the floor is the marker start (290 K), not a node.
+        g.tk1 .= 500.0
         g.tk1[:, 2:2:end] .= 1800.0
         g.tk2 .= g.tk1 .+ 5.0
         g.DT .= 5.0
