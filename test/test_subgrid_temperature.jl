@@ -34,7 +34,7 @@ Run one subgrid step and the grid-to-marker increment of its node counterpart (c
 increment zero) and return the change of the rock heat content, sum of rhocp dT over rock
 markers, with the sum of the absolute marker corrections as its scale.
 """
-function _rock_heat_change(c, rhocp_rock; dt=3.0e12, kw...)
+function _rock_heat_change(c, rhocp_rock; dt=3.0e12, phi_dry=zeros(c.n), kw...)
     tkm = copy(c.tkm)
     DT = zeros(size(c.tk1))
     TKSUM = zeros(size(c.tk1))
@@ -54,7 +54,7 @@ function _rock_heat_change(c, rhocp_rock; dt=3.0e12, kw...)
         1;
         coords=c.coords,
         dsubgridt=1.0,
-        phi_dry=zeros(c.n),
+        phi_dry=phi_dry,
         kw...,
     )
     tk_sub = copy(tkm)
@@ -77,12 +77,17 @@ end
         c = _subgrid_cell()
         rhocp_rock = fill(Erebus.rhocpsolidm[1], c.n)
         r = _rock_heat_change(c, rhocp_rock)
-        # The rock markers relax toward 300 K, so the scale is not zero.
-        @test r.scale > 1.0e6
+        # The rock markers relax toward 300 K: the scale is the size of the corrections.
+        @test isapprox(
+            r.scale,
+            sum(Erebus.rhocpsolidm[1] .* abs.(r.tk_sub[1:6] .- c.tkm[1:6]));
+            rtol=1e-12,
+        )
+        @test !isapprox(r.tk_sub[1:6], c.tkm[1:6]; rtol=1e-6)
         @test abs(r.dE) <= 1.0e-12 * r.scale
         # Sticky-air markers keep their temperature in the subgrid step.
         air = findall(>=(3), c.tm)
-        @test r.tk_sub[air] == c.tkm[air]
+        @test isapprox(r.tk_sub[air], c.tkm[air]; rtol=0.0, atol=0.0)
         # Bounds: the relaxed rock markers stay between the node and their start values.
         rock = findall(<(3), c.tm)
         @test all(300.0 .<= r.tk_sub[rock] .<= c.tkm[rock])
@@ -91,8 +96,9 @@ end
     @testset "relaxation uses the marker heat capacity and conductivity" begin
         c = _subgrid_cell(; n_air=0)
         dt = 3.0e12
-        rhocp_m = fill(2.0 * Erebus.rhocpsolidm[1], c.n)
-        k_m = fill(0.5 * Erebus.ksolidm[1], c.n)
+        # Different values per marker, so the heat capacity does not cancel in the node mean.
+        rhocp_m = [6.6e6, 4.5e6, 3.3e6, 8.1e6, 3.1e6, 5.2e6]
+        k_m = [1.5, 0.4, 3.0, 2.2, 0.9, 5.0]
         r = _rock_heat_change(c, rhocp_m; dt, rhocptotalm=rhocp_m, ktotalm=k_m)
         coords = c.coords
         x = dt * (2.0 * (inv(coords.dx^2) + inv(coords.dy^2)))
@@ -112,8 +118,38 @@ end
         z = zeros(c.n)
         a = _rock_heat_change(c, fill(Erebus.rhocpsolidm[1], c.n))
         b = _rock_heat_change(c, fill(Erebus.rhocpsolidm[1], c.n); rhocptotalm=z, ktotalm=z)
-        @test b.tk_sub == a.tk_sub
+        @test isapprox(b.tk_sub, a.tk_sub; rtol=0.0, atol=0.0)
         @test all(isfinite, b.tk_sub)
+    end
+
+    @testset "zero time step and zero heat capacity change nothing" begin
+        c = _subgrid_cell(; n_air=0)
+        phi1 = vcat(1.0, zeros(c.n - 1))
+        z = _rock_heat_change(c, fill(Erebus.rhocpsolidm[1], c.n); dt=0.0, phi_dry=phi1)
+        @test all(isfinite, z.tk_sub)
+        @test isapprox(z.tk_sub, c.tkm; rtol=0.0, atol=0.0)
+        # A marker of porosity 1 holds no heat: it takes the grid temperature, no NaN.
+        tkm = copy(c.tkm)
+        Erebus.apply_subgrid_temperature_diffusion!(
+            c.xm,
+            c.ym,
+            c.tm,
+            tkm,
+            zeros(c.n),
+            c.tk1,
+            zeros(size(c.tk1)),
+            zeros(size(c.tk1)),
+            zeros(size(c.tk1)),
+            3.0e12,
+            c.n,
+            1;
+            coords=c.coords,
+            dsubgridt=1.0,
+            phi_dry=vcat(1.0, zeros(c.n - 1)),
+        )
+        @test all(isfinite, tkm)
+        @test isapprox(tkm[1], 300.0; rtol=1e-12)
+        @test !isapprox(tkm[2:end], c.tkm[2:end]; rtol=1e-6)
     end
 
     @testset "error contract" begin
@@ -137,6 +173,144 @@ end
         @test_throws DomainError f(args(1.0)...; coords=c.coords, dsubgridt=NaN)
         @test_throws DomainError f(args(-1.0)...; coords=c.coords, dsubgridt=1.0)
         @test_throws DomainError f(args(Inf)...; coords=c.coords, dsubgridt=1.0)
+    end
+
+    @testset "the step passes the marker heat capacity and conductivity" begin
+        cfg = override_config(
+            default_config(), Dict{String,Any}("geometry.spherical_metric" => false)
+        )
+        state, coords, ws, _, _ = init_simulation(cfg)
+        core = state.markers.core
+        rocks = findall(<(3), core.tm)
+        core.rhocptotalm[rocks] .= 2.0 * Erebus.rhocpsolidm[1]
+        core.ktotalm[rocks] .= 0.25 * Erebus.ksolidm[1]
+        core.tkm[rocks] .= 400.0
+        state.grids.tk1 .= 300.0
+        state.grids.tk2 .= 300.0
+        state.grids.DT .= 0.0
+        state.timestep = 2
+        args = (core.xm, core.ym, core.tm)
+        n = length(state.markers)
+        function direct(; kw...)
+            tkm = copy(core.tkm)
+            g = state.grids
+            Erebus.apply_subgrid_temperature_diffusion!(
+                args...,
+                tkm,
+                core.phim,
+                g.tk1,
+                zeros(size(g.DT)),
+                zeros(size(g.DT)),
+                zeros(size(g.DT)),
+                state.dt,
+                n,
+                1;
+                coords=coords,
+                dsubgridt=cfg.solver.dsubgridt,
+                phi_dry=Erebus.dry_porosity(state.markers),
+                kw...,
+            )
+            return tkm[rocks]
+        end
+        with_marker = direct(; rhocptotalm=core.rhocptotalm, ktotalm=core.ktotalm)
+        without = direct()
+        diffuse_and_update_markers!(state, coords, cfg, ws)
+        @test isapprox(core.tkm[rocks], with_marker; rtol=1e-12)
+        # Discrimination: the constitutive values give other temperatures.
+        @test !isapprox(with_marker, without; rtol=1e-6)
+    end
+
+    @testset "the relaxation takes no rock marker below its cold floor" begin
+        # Two rock markers in one cell between cold (290 K) and hot (1800 K) nodes, at a
+        # large Fourier number: the counterpart of the hot-side marker must not push the
+        # cold-side marker below 290 K.
+        coords = GridCoordinates(GridConfig(; Nx=51, Ny=51, xsize=5.0e4, ysize=5.0e4))
+        j0 = 25
+        xL = coords.xp[j0]
+        xm = [xL + 0.02 * coords.dx, xL + 0.48 * coords.dx]
+        ym = fill(coords.yp[j0] + 0.5 * coords.dy, 2)
+        tm = [1, 1]
+        tkm = [290.0, 600.0]
+        tk1 = fill(290.0, coords.Ny1, coords.Nx1)
+        tk1[:, (j0 + 1):end] .= 1800.0
+        rhocp = fill(3.3e6, 2)
+        k = fill(3.0, 2)
+        DT = zeros(size(tk1))
+        TKSUM = zeros(size(tk1))
+        RHOCPSUM = zeros(size(tk1))
+        tkm_pre = copy(tkm)
+        Erebus.apply_subgrid_temperature_diffusion!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            zeros(2),
+            tk1,
+            DT,
+            TKSUM,
+            RHOCPSUM,
+            1.0e12,
+            2,
+            1;
+            coords=coords,
+            dsubgridt=1.0,
+            rhocptotalm=rhocp,
+            ktotalm=k,
+        )
+        Erebus.limit_marker_temperature_increment!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            rhocp,
+            DT,
+            tk1,
+            TKSUM,
+            RHOCPSUM,
+            2;
+            coords=coords,
+            DT_conduction=zeros(size(tk1)),
+            tkm_floor=tkm_pre,
+            tk_floor=tk1,
+        )
+        Erebus.update_marker_temperature!(xm, ym, tkm, DT, tk1, 2, 2; coords=coords)
+        @test all(isfinite, tkm)
+        @test minimum(tkm) >= 290.0 - 1.0e-9
+        # The relaxation only moves heat between the two markers: the rejected cooling of
+        # the cold one goes back to the other, so the heat of the pair is kept.
+        dE = sum(rhocp .* (tkm .- tkm_pre))
+        @test abs(dE) <= 1.0e-12 * sum(rhocp .* tkm_pre)
+        @test tkm[2] >= tkm[1]
+    end
+
+    @testset "the step keeps rock markers above the cold floor" begin
+        cfg = override_config(
+            default_config(), Dict{String,Any}("geometry.spherical_metric" => false)
+        )
+        state, coords, ws, _, _ = init_simulation(cfg)
+        core = state.markers.core
+        g = state.grids
+        rocks = findall(<(3), core.tm)
+        core.rhocptotalm[rocks] .= 3.3e6
+        core.ktotalm[rocks] .= 3.0
+        core.tkm[rocks] .= 290.0
+        # Hot and cold node columns alternate, so many cells hold a steep gradient.
+        g.tk1 .= 290.0
+        g.tk1[:, 2:2:end] .= 1800.0
+        g.tk2 .= g.tk1
+        g.DT .= 0.0
+        g.DT0 .= 0.0
+        state.dt = 1.0e13
+        state.timestep = 2
+        tkm_pre = copy(core.tkm)
+        diffuse_and_update_markers!(state, coords, cfg, ws)
+        Erebus.update_marker_temperature!(
+            core.xm, core.ym, core.tkm, g.DT, g.tk2, 2, length(state.markers); coords=coords
+        )
+        @test all(isfinite, core.tkm[rocks])
+        @test minimum(core.tkm[rocks]) >= 290.0 - 1.0e-9
+        # The relaxation acted: some rock markers warmed toward the hot nodes.
+        @test !isapprox(core.tkm[rocks], tkm_pre[rocks]; rtol=1e-6)
     end
 
     @testset "rock marker temperature follows the grid at the air boundary" begin

@@ -4676,7 +4676,8 @@ function apply_subgrid_temperature_diffusion!(
         throw(DomainError(dsubgridt, "dsubgridt must be finite and non-negative"))
     (isfinite(dt) && dt >= 0.0) ||
         throw(DomainError(dt, "dt must be finite and non-negative"))
-    if dsubgridt == 0.0
+    # nothing relaxes in a zero step (and 0 / 0 at zero heat capacity is avoided)
+    if dsubgridt == 0.0 || dt == 0.0
         return nothing
     end
     Ny1, Nx1 = size(RHOCPSUM)
@@ -4703,20 +4704,21 @@ function apply_subgrid_temperature_diffusion!(
         # compute marker-node temperature difference
         @inbounds δtkm = tkm[m] - dot4(grid_vector(i, j, tk1), weights)
         # compute marker properties
-        @inbounds if phi_dry !== nothing
-            # dry porous rock (Henke et al. 2012)
-            rhocp_c = rhocpsolidm[tm[m]] * (1.0 - phi_dry[m])
-            k_c = k_porous(compute_ksolidm(tkm[m], mode), phi_dry[m])
+        # the marker values of the step (latent heat, k_eff) when given, else constitutive
+        @inbounds rhocp_m = if rhocptotalm !== nothing && rhocptotalm[m] > 0.0
+            rhocptotalm[m]
+        elseif phi_dry !== nothing
+            rhocpsolidm[tm[m]] * (1.0 - phi_dry[m])
         else
-            rhocp_c = total(rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
-            k_c = ktotal(
-                compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m]
-            )
+            total(rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
         end
-        # the marker values of the step (latent heat, k_eff) when given
-        @inbounds rhocp_m =
-            (rhocptotalm !== nothing && rhocptotalm[m] > 0.0) ? rhocptotalm[m] : rhocp_c
-        @inbounds k_m = (ktotalm !== nothing && ktotalm[m] > 0.0) ? ktotalm[m] : k_c
+        @inbounds k_m = if ktotalm !== nothing && ktotalm[m] > 0.0
+            ktotalm[m]
+        elseif phi_dry !== nothing
+            k_porous(compute_ksolidm(tkm[m], mode), phi_dry[m])
+        else
+            ktotal(compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m])
+        end
         # time-relax δtkm difference
         δtkm *= (
             exp(-dsubgridt * k_m * dt / rhocp_m * (2.0 * (inv(dx_val^2) + inv(dy_val^2)))) -
@@ -4768,6 +4770,10 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
       subgrid diffusion, which the bound does not limit
     - w3d: marker out-of-plane length under the spherical metric [m], or `nothing` for
       equal weights
+    - tkm_floor, tk_floor: marker temperatures before subgrid diffusion and the node
+      temperatures of the step start; when given, a rock marker must not fall below
+      `min(tkm_floor[m], min(tk_floor nodes), min(tk2 nodes))`, so the heat exchange of
+      subgrid diffusion cannot cool it below its own start or its nodes
 
 # Returns
 
@@ -4795,8 +4801,16 @@ function limit_marker_temperature_increment!(
     max_passes::Int=4,
     DT_conduction=DT,
     w3d=nothing,
+    tkm_floor=nothing,
+    tk_floor=nothing,
 )
     marknum >= 0 || throw(DomainError(marknum, "marknum must be non-negative"))
+    (tkm_floor === nothing) == (tk_floor === nothing) ||
+        throw(ArgumentError("tkm_floor and tk_floor must be given together"))
+    (tkm_floor === nothing || length(tkm_floor) >= marknum) ||
+        throw(ArgumentError("tkm_floor must hold at least marknum entries"))
+    (tk_floor === nothing || size(tk_floor) == size(DT)) ||
+        throw(ArgumentError("tk_floor must have the size of the P grid"))
     max_passes >= 1 || throw(DomainError(max_passes, "max_passes must be at least 1"))
     marker_arrays = (xm, ym, tm, tkm, rhocptotalm)
     all(a -> length(a) >= marknum, marker_arrays) ||
@@ -4830,6 +4844,11 @@ function limit_marker_temperature_increment!(
     @inline function marker_range(m, i, j, weights)
         increment = dot4(grid_vector(i, j, DT), weights)
         T_new = tkm[m] + correction[m] + increment
+        if tkm_floor !== nothing
+            # floor of the step: the marker before subgrid diffusion and its nodes
+            T_floor = min(tkm_floor[m], minimum(grid_vector(i, j, tk_floor)))
+            return T_new, min(T_floor, minimum(grid_vector(i, j, tk2)))
+        end
         T_base = tkm[m]
         if DT_conduction !== DT
             T_base += increment - dot4(grid_vector(i, j, DT_conduction), weights)

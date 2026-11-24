@@ -175,8 +175,8 @@ A pass means that a point lies between the lines of its grid.
 **Known limit.**
 A configuration file gives the sticky air a conductivity of 3000 W/(m K), and it cannot change it.
 The air then draws heat out of the outer cells of the rock.
-In the main case the outermost 3 bins, from 19.5 to 20 km, reached only 290.0 to 291.6 K.
-With the matched air they reached 295.0 to 327.3 K, and in the 1-D model 301.7 to 358.3 K.
+In the main case the outermost 3 bins, from 19.5 to 20 km, reached only 290.0 to 292.1 K.
+With the matched air they reached 293.9 to 317.0 K, and in the 1-D model 301.7 to 358.3 K.
 With this value the shell of the main case is 5062.5 m deep, 1.34 cells deeper than in the 1-D model, against 0.84 cells with the matched air.
 The CI case and 5 of the 6 runs therefore give the air the conductivity of the porous surface rock.
 By default a configuration file gives the air a heat capacity of $3 \times 10^{6}$ J/(m³ K), less than that of solid rock; we have not measured the shell with that default.

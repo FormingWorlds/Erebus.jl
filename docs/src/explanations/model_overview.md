@@ -301,7 +301,6 @@ Module: `src/simulation/steps/diffuse_and_update_markers.jl`, `src/simulation/st
 | $\sigma_\mathrm{grid}$ | Deviatoric stress interpolated from grid nodes | $\text{Pa}$ | `diffuse_and_update_markers!` (`src/simulation/steps/diffuse_and_update_markers.jl`) |
 | $\sigma_m$ | Marker deviatoric stress state | $\text{Pa}$ | `diffuse_and_update_markers!` (`src/simulation/steps/diffuse_and_update_markers.jl`) |
 | $d_s$ | Subgrid stress diffusion damping parameter | dimensionless | `solver.dsubgrids` (`src/config.jl`) |
-| $d_t$ | Subgrid temperature diffusion relaxation factor | dimensionless | `solver.dsubgridt` (`src/config.jl`) |
 | $\tau_\mathrm{M}$ | Maxwell viscoelastic relaxation timescale | $\text{s}$ | `diffuse_and_update_markers!` (`src/simulation/steps/diffuse_and_update_markers.jl`) |
 | $r_\mathrm{max}$ | Maximum radial distance of active markers | $\text{m}$ | `telescope_domain!` (`src/simulation/steps/telescope_domain.jl`) |
 | $R_\mathrm{tel}$ | Domain doubling threshold ($0.70 \cdot x_\mathrm{size}/2$) | $\text{m}$ | `telescoping.r_threshold_fraction` (`src/config.jl`) |

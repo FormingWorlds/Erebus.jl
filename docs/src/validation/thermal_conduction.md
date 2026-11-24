@@ -213,7 +213,7 @@ The markers start with a random jitter, set by `solver.seed`.
 The random stream can change between Julia versions.
 The bands must stay wider than this jitter, or a harmless change would fail them.
 We therefore measured the spread over 8 other seeds.
-The largest shift is 0.76 K on the centre rise and 0.0019 on the L2 error.
+The largest shift is 0.74 K on the centre rise and 0.0023 on the L2 error.
 
 ```@raw html
 <div class="validation-fig-light">

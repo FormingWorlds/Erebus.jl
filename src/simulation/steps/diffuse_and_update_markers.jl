@@ -173,6 +173,9 @@ function diffuse_and_update_markers!(
         DS33=s33_kw.DS33,
     )
 
+    # marker temperatures before subgrid diffusion: the cold floor of the limit below
+    subgrid_on = cfg.solver.dsubgridt > 0.0 && state.timestep > 1
+    tkm_pre = subgrid_on ? core.tkm[1:marknum] : nothing
     apply_subgrid_temperature_diffusion!(
         core.xm,
         core.ym,
@@ -209,6 +212,8 @@ function diffuse_and_update_markers!(
             coords=coords,
             DT_conduction=cfg.solver.dsubgridt > 0.0 ? g.DT0 : g.DT,
             w3d=cfg.geometry.spherical_metric ? core.w3d_m : nothing,
+            tkm_floor=tkm_pre,
+            tk_floor=subgrid_on ? g.tk1 : nothing,
         )
     end
 
