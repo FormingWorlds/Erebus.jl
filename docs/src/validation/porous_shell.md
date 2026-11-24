@@ -260,7 +260,7 @@ Open symbols mark runs that reached the limit of 20 Myr while part of the body w
 <!-- VALIDATION_RECORD_START: porous_shell -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `ef436b46`, config SHA-256 `fcf41aa4e790`)
+**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `f0cec3dd`, config SHA-256 `fcf41aa4e790`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
