@@ -470,7 +470,7 @@ end
 Medians of `values` in the radial bins `[(b - 1) dr, min(b dr, R))` below `R`, for
 `b = 1, ..., ceil(R / dr)`: the outermost bin is partial when `R / dr` is not a whole
 number. The centre of a bin is the midpoint of its part below `R`. Values at `r >= R` and
-`r < 0`, and empty bins, are left out.
+`r < 0`, and empty bins, are left out; a value at `0 <= r < R` must be finite.
 
 Parameters
 ----------
@@ -493,7 +493,7 @@ Raises
 ArgumentError
     If `r` and `values` differ in length.
 DomainError
-    If `R` or `dr` is not positive and finite.
+    If `R` or `dr` is not positive and finite, or a value at `0 <= r < R` is not finite.
 """
 function radial_bin_medians(
     r::AbstractVector{Float64}, values::AbstractVector{Float64}, R::Float64, dr::Float64
@@ -509,6 +509,7 @@ function radial_bin_medians(
     bins = [Float64[] for _ in 1:nb]
     for (ri, v) in zip(r, values)
         0.0 <= ri < R || continue
+        isfinite(v) || throw(DomainError(v, "the value at r = $ri m must be finite"))
         b = min(floor(Int, ri / dr) + 1, nb)
         push!(bins[b], v)
     end
@@ -1031,6 +1032,35 @@ function expected_metric_limits(; d_shell_ref::Float64=reference_solution().d_sh
 end
 
 """
+    metric_units(id)
+
+Return the units of a metric of the porous shell records, as the exporters write them:
+`"m"` for a shell depth and `"dimensionless"` for a maximum temperature error or an energy
+residual.
+
+Parameters
+----------
+id : AbstractString
+    Metric id, `shell_depth_<run>`, `tmax_rel_l2_<run>` or `energy_lse_residual_<run>`.
+
+Returns
+-------
+String
+    `"m"` or `"dimensionless"`.
+
+Raises
+------
+ArgumentError
+    If `id` has none of the 3 prefixes.
+"""
+function metric_units(id::AbstractString)::String
+    startswith(id, "shell_depth_") && return "m"
+    (startswith(id, "tmax_rel_l2_") || startswith(id, "energy_lse_residual_")) &&
+        return "dimensionless"
+    return throw(ArgumentError("unknown metric id '$id'"))
+end
+
+"""
     bench_shell_reference(bench)
 
 Return the 1-D shell depth of the runs in `bench`, the reference of the shell depth
@@ -1239,6 +1269,68 @@ function _parse_record(record_path::String)
 end
 
 """
+    _push_extra_config_keys!(errors, rec_cfg, summary)
+
+Append to `errors` one message per key of the recorded `[config]` section that the
+expected summary does not have, in sorted order.
+
+Parameters
+----------
+errors : Vector{String}
+    Error messages, changed in place.
+rec_cfg : AbstractDict
+    Recorded `[config]` section.
+summary : AbstractDict
+    Expected configuration summary.
+
+Returns
+-------
+Vector{String}
+    `errors`.
+"""
+function _push_extra_config_keys!(
+    errors::Vector{String}, rec_cfg::AbstractDict, summary::AbstractDict
+)
+    for k in sort!([String(k) for k in keys(rec_cfg) if !haskey(summary, k)])
+        push!(
+            errors, "Recorded config has key '$k' that the expected summary does not have"
+        )
+    end
+    return errors
+end
+
+"""
+    _push_units_error!(errors, mid, m)
+
+Append to `errors` a message when the recorded units of the metric `mid` differ from
+`metric_units(mid)`.
+
+Parameters
+----------
+errors : Vector{String}
+    Error messages, changed in place.
+mid : String
+    Metric id with a prefix that `metric_units` knows.
+m : AbstractDict
+    Recorded metric table with a string `units`.
+
+Returns
+-------
+Vector{String}
+    `errors`.
+
+Raises
+------
+ArgumentError
+    From `metric_units`, if `mid` has no known prefix.
+"""
+function _push_units_error!(errors::Vector{String}, mid::String, m::AbstractDict)
+    units, expected = String(m["units"]), metric_units(mid)
+    units == expected || push!(errors, "Metric '$mid' has units '$units', not '$expected'")
+    return errors
+end
+
+"""
     check_physics_regression_bands(metrics, record_path)
 
 Check that each metric lies within its regression band (`PHYSICS_REGRESSION_BANDS`) around
@@ -1303,11 +1395,13 @@ end
     check_validation_reproducibility(bench, record_path; check_recorded_values=true, d_shell_ref=nothing)
 
 Compare freshly evaluated metrics, reference values, regression bands, the reference
-literals and the configuration hash and summary with a committed validation record. The
-recorded `atol`, `rtol` and `comparison` of each metric must equal the limit of the code
-(`expected_metric_limits`), so that a widened tolerance in the record fails. A recorded
-metric without a reference in `expected_metric_references` or without a limit in
-`expected_metric_limits` is an error. The replay of recorded values (`REPLAY_RTOL`,
+literals and the configuration hash and summary with a committed validation record. A
+`[config]` key outside `expected_config_summary` is an error, and every metric must have
+`nx = NX_REFERENCE`, `case = CASE_ID` and, for an id of `EXPECTED_METRIC_IDS`, the units
+of `metric_units`. The recorded `atol`, `rtol` and `comparison` of each metric must
+equal the limit of the code (`expected_metric_limits`), so that a widened tolerance in
+the record fails. A recorded metric without a reference in `expected_metric_references`
+or without a limit in `expected_metric_limits` is an error. The replay of recorded values (`REPLAY_RTOL`,
 `REPLAY_ATOL_BOUNDS`) runs when `check_recorded_values` is `true` and the Julia
 major.minor version matches
 `metadata.julia_version`; the regression bands always run. A record that fails
@@ -1370,7 +1464,9 @@ function check_validation_reproducibility(
         _same_julia_major_minor(string(get(meta_sec, "julia_version", "")))
 
     rec_cfg = get(raw, "config", Dict{String,Any}())
-    for (k, v_exp) in expected_config_summary(cfg)
+    summary = expected_config_summary(cfg)
+    _push_extra_config_keys!(errors, rec_cfg, summary)
+    for (k, v_exp) in summary
         if !haskey(rec_cfg, k)
             push!(errors, "Recorded config missing key '$k'")
             continue
@@ -1402,6 +1498,12 @@ function check_validation_reproducibility(
     for m in raw_metrics
         !(m isa AbstractDict && haskey(m, "id")) && continue
         mid = String(m["id"])
+        # The exporter writes every metric at NX_REFERENCE, of CASE_ID, in its units
+        Int(m["nx"]) == NX_REFERENCE ||
+            push!(errors, "Metric '$mid' has nx $(m["nx"]), not $NX_REFERENCE")
+        String(m["case"]) == CASE_ID ||
+            push!(errors, "Metric '$mid' has case '$(m["case"])', not '$CASE_ID'")
+        mid in EXPECTED_METRIC_IDS && _push_units_error!(errors, mid, m)
         if !haskey(bench.metrics, mid)
             push!(errors, "Benchmark output missing metric '$mid'")
             continue
@@ -1740,9 +1842,10 @@ end
 
 Check the suite record `path` without a rerun: the schema of `validate_record_dict`, the
 record id, the configuration hash of the case set (`suite_config_sha256`), the `[config]`
-summary, the case list against `SUITE_CASES`, the metric ids (`suite_metric_ids`), the
-grid of each metric, the tolerance of each metric against `suite_metric_limit` and that
-each value passes it. The reference of a shell depth must equal the pinned 1-D depth of
+summary with no key outside it, the case list against `SUITE_CASES`, the metric ids
+(`suite_metric_ids`), the case, grid and units (`metric_units`) of the run that each
+metric id names, the tolerance of each metric against `suite_metric_limit` and that each
+value passes it. The reference of a shell depth must equal the pinned 1-D depth of
 its case (`suite_reference_depth`), which also sets its rule, and the shell depth must be
 finite and in `[0, R_PLANET]`. A file that is not valid TOML returns the parser error.
 
@@ -1783,7 +1886,9 @@ function check_suite_record_static(
         "Recorded config_sha256 ($(meta["config_sha256"])) does not match the case set ($expected_sha)",
     )
     rec_cfg = raw["config"]
-    for (k, v_exp) in expected_suite_config_summary()
+    summary = expected_suite_config_summary()
+    _push_extra_config_keys!(errors, rec_cfg, summary)
+    for (k, v_exp) in summary
         if !haskey(rec_cfg, k)
             push!(errors, "Recorded config missing key '$k'")
         elseif !_summary_value_matches(rec_cfg[k], v_exp)
@@ -1805,13 +1910,20 @@ function check_suite_record_static(
         errors,
         "Recorded cases $(sort!(collect(cases))) do not match SUITE_CASES $(sort!(collect(keys(nx_of))))",
     )
+    # The run of a metric comes from its id; an id of no run fails the id check above
+    tag_of = Dict(
+        "$(prefix)_$(c[1])" => String(c[1]) for c in SUITE_CASES for
+        prefix in ("shell_depth", "tmax_rel_l2")
+    )
     for m in metrics
-        mid, tag = String(m["id"]), String(m["case"])
-        haskey(nx_of, tag) || continue
-        endswith(mid, "_" * tag) ||
-            push!(errors, "Metric '$mid' does not belong to case '$tag'")
+        mid = String(m["id"])
+        haskey(tag_of, mid) || continue
+        tag = tag_of[mid]
+        String(m["case"]) == tag ||
+            push!(errors, "Metric '$mid' has case '$(m["case"])', not '$tag'")
         nx = nx_of[tag]
         Int(m["nx"]) == nx || push!(errors, "Metric '$mid' has nx $(m["nx"]), not $nx")
+        _push_units_error!(errors, mid, m)
         value, ref = Float64(m["value"]), Float64(m["reference"])
         if startswith(mid, "shell_depth_")
             (isfinite(value) && 0.0 <= value <= R_PLANET) || push!(

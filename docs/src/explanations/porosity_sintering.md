@@ -391,10 +391,13 @@ In each sector, the first bin whose median marker is sintered ends the shell.
 The depth of the sector is the depth of the outer edge of that bin.
 The result is the median of the 16 sector depths, with the 25 % and 75 % quartiles.
 
-- Rock markers above the radius $R_p$ do not count. The pressure there is 0, so they never sinter.
+- Rock markers above the radius $R_p$ do not count.
+  The pressure there is 0, so they never sinter.
 - An empty bin is skipped.
 - A sector without a sintered bin has the depth $R_p$: the whole sector is porous.
-- With `measure = :phi_gt_04`, a marker counts as sintered when `phi_d` $\leq 0.4$. The depth is then that of the region with $\phi > 0.4$, the measure of Fig. 8 of Lichtenberg et al. (2016a). This measure gives a result only when the cold-pressed porosity at the surface is above 0.4.
+- With `measure = :phi_gt_04`, a marker counts as sintered when `phi_d` $\leq 0.4$.
+  The depth is then that of the region with $\phi > 0.4$, the measure of Fig. 8 of Lichtenberg et al. (2016a).
+  This measure gives a result only when the cold-pressed porosity at the surface is above 0.4.
 
 On a simulation state, the bins are half the smaller grid spacing.
 Here `cfg` is a configuration with `porosity.model = "henke2012"`:
@@ -413,7 +416,8 @@ The porous layer conducts heat much less well than compact rock.
 At $\phi = 0.25$ the conductivity is 0.21 W/(m K), against 3 W/(m K) at $\phi = 0$.
 A thin layer can therefore hold the drop from the sintering temperature of 700 K to the cold surface.
 Below it, the rock is above the sintering temperature of 700 K and sinters.
-In the 1-D reference model with steps of 2 kyr, a body with $R_p = 20$ km and $\phi_{init} = 0.25$ keeps a shell of 380 m when it forms 1.5 Myr after the first solids.
+Take a body with $R_p = 20$ km and $\phi_{init} = 0.25$ in the 1-D reference model, with steps of 2 kyr.
+It keeps a shell of 380 m when it forms 1.5 Myr after the first solids.
 It keeps a shell of 4.55 km when it forms at 2.5 Myr, because it has less $^{26}$Al and stays cooler.
 
 ---

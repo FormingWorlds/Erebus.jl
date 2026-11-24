@@ -364,6 +364,21 @@ end
             @test_throws DomainError PSV.radial_bin_medians(r, v, bad, 1.0)
             @test_throws DomainError PSV.radial_bin_medians(r, v, 10.0, bad)
         end
+        # A non-finite value at 0 <= r < R is an error; at r >= R it is left out
+        for bad in (NaN, Inf, -Inf)
+            v_in, v_out = copy(v), copy(v)
+            v_in[2] = bad
+            v_out[end] = bad
+            @test_throws DomainError PSV.radial_bin_medians(r, v_in, 10.0, 1.0)
+            @test_throws DomainError PSV.radial_bin_medians([0.0], [bad], 10.0, 1.0)
+            @test isapprox(
+                last(PSV.radial_bin_medians(r, v_out, 10.0, 1.0)),
+                [2.0, 6.0, 7.0];
+                atol=1e-12,
+            )
+            c_r, m_r = PSV.radial_bin_medians([10.0, 1.0], [bad, 3.0], 10.0, 1.0)
+            @test isapprox(c_r, [1.5]; atol=1e-12) && isapprox(m_r, [3.0]; atol=1e-12)
+        end
     end
 
     @testset "Run clock: the last step and the final time of the case" begin
@@ -579,6 +594,25 @@ end
             ok_x, errs_x = static_errors(r -> (r["metrics"][3]["nx"] = 65))
             @test !ok_x
             @test any(occursin("has nx 65", e) for e in errs_x)
+            # A [config] key outside the expected summary, a metric of another run and
+            # units other than those of the exporter fail
+            ok_k, errs_k = static_errors(r -> (r["config"]["k_extra"] = 1.0))
+            @test !ok_k
+            @test any(occursin("'k_extra'", e) for e in errs_k)
+            ok_cs, errs_cs = static_errors(r -> (r["metrics"][3]["case"] = "s65_25_025"))
+            @test !ok_cs
+            @test any(
+                occursin("shell_depth_s129_25_025", e) && occursin("case", e) for
+                e in errs_cs
+            )
+            for (i, units) in ((1, "km"), (2, "m"))
+                ok_u, errs_u = static_errors(r -> (r["metrics"][i]["units"] = units))
+                @test !ok_u
+                @test any(
+                    occursin(raw_suite["metrics"][i]["id"], e) &&
+                        occursin("units '$units'", e) for e in errs_u
+                )
+            end
             ok_v, errs_v = static_errors(r -> (r["metrics"][3]["value"] += 1.0e4))
             @test !ok_v
             @test any(occursin("fails comparison", e) for e in errs_v)
@@ -764,6 +798,129 @@ end
             @test !any(
                 occursin("nx65", e) && occursin(r"no (limit|recomputed)", e) for e in errs_x
             )
+        end
+    end
+
+    @testset "Reproducibility check: config keys and the nx, case and units of a metric" begin
+        vals = Dict(
+            String(m["id"]) => Float64(m["value"]) for m in raw_record_all["metrics"]
+        )
+        fake_bench = (; runs=Dict{Int,Any}(), metrics=vals)
+        mktempdir() do tmpdir
+            function repro_errors(f)
+                rec = deepcopy(raw_record_all)
+                f(rec)
+                path = write_porous_shell_toml(joinpath(tmpdir, "record.toml"), rec)
+                return PSV.check_validation_reproducibility(
+                    fake_bench, path; check_recorded_values=false, d_shell_ref=4590.0
+                )
+            end
+            ok_same, errs_same = repro_errors(identity)
+            @test ok_same && isempty(errs_same)
+            ok_k, errs_k = repro_errors(r -> (r["config"]["k_extra"] = 1.0))
+            @test !ok_k
+            @test any(occursin("'k_extra'", e) for e in errs_k)
+            # The exporter writes every metric at nx 65, of CASE_ID, in its units
+            for (key, value, needle) in (
+                ("nx", 129, "nx 129"),
+                ("case", "porous_shell_t1.5_phi0.25", "case 'porous_shell_t1.5_phi0.25'"),
+                ("units", "km", "units 'km'"),
+            )
+                ok_m, errs_m = repro_errors(r -> (r["metrics"][1][key] = value))
+                @test !ok_m
+                @test any(
+                    occursin("'shell_depth_nx65'", e) && occursin(needle, e) for e in errs_m
+                )
+            end
+            ok_u, errs_u = repro_errors(r -> (r["metrics"][3]["units"] = "m"))
+            @test !ok_u
+            @test any(
+                occursin("'energy_lse_residual_nx65'", e) && occursin("units 'm'", e) for
+                e in errs_u
+            )
+            @test [PSV.metric_units(id) for id in PSV.EXPECTED_METRIC_IDS] == ["m", "dimensionless", "dimensionless"]
+            @test_throws ArgumentError PSV.metric_units("other_nx65")
+        end
+    end
+
+    @testset "Figure data export reads the suite folder through the record checks" begin
+        raw_suite = TOML.parsefile(
+            joinpath(@__DIR__, "..", "benchmarks", "records", "porous_shell_suite.toml")
+        )
+        script_host = Module(:PorousShellFigureData)
+        # A bare `Module` has no `include`; the script calls it at top level. The modules
+        # loaded here are handed over, so the script does not load them again.
+        Core.eval(script_host, :(include(path) = Base.include($script_host, path)))
+        Core.eval(script_host, :(const PorousShellValidation = $PSV))
+        Core.eval(script_host, :(const PorousShellExport = $PorousShellExport))
+        Core.eval(script_host, :(const PorousShellSuiteExport = $PorousShellSuiteExport))
+        Base.include(
+            script_host,
+            joinpath(@__DIR__, "..", "scripts", "export_validation_porous_shell_data.jl"),
+        )
+        data_main = getfield(script_host, :data_export_main)
+        export_all = getfield(script_host, :export_all)
+        run_main(args) =
+            capture_porous_shell_stdio(() -> Base.invokelatest(data_main, args))
+        tags = [String(c[1]) for c in PSV.SUITE_CASES]
+        mktempdir() do tmpdir
+            function suite_with_profiles(name; kw...)
+                dir = write_suite_folder(mkpath(joinpath(tmpdir, name)), raw_suite; kw...)
+                for tag in tags
+                    write(
+                        joinpath(dir, "prof_$tag.csv"),
+                        "r_m,tmax_K,tmax_ref_K,phi,phi_ref\n375.0,900.0,905.0,0.01,0.012\n",
+                    )
+                end
+                return dir
+            end
+            table = mkpath(joinpath(tmpdir, "table"))
+            write(
+                joinpath(table, "g1.csv"),
+                "t_form_myr,phi_init,d_shell_m\n2.5,0.25,4560.0\n1.5,0.25,0.0\n",
+            )
+            # A complete folder: 6 summary rows in the order of SUITE_CASES
+            out = joinpath(tmpdir, "out")
+            ok_run = run_main([out, suite_with_profiles("full"), table])
+            @test ok_run.value == 0
+            summary = readlines(joinpath(out, "suite_summary.csv"))
+            @test summary[1] == join(PSV.SUITE_RESULT_HEADER, ",")
+            @test [first(split(l, ",")) for l in summary[2:end]] == tags
+            @test all(isfile(joinpath(out, "profile_$tag.csv")) for tag in tags)
+            @test readlines(joinpath(out, "table_1d.csv"))[2:end] ==
+                ["1.5,0.25,0.0", "2.5,0.25,4560.0"]
+            # An incomplete folder is refused, and nothing is written
+            part = suite_with_profiles("part")
+            rm(joinpath(part, "result_s129_25_050.csv"))
+            out_part = joinpath(tmpdir, "out_part")
+            part_run = run_main([out_part, part, table])
+            @test part_run.value == 1
+            @test occursin("result_s129_25_050.csv", part_run.err)
+            @test !ispath(out_part)
+            no_prof = suite_with_profiles("no_prof")
+            rm(joinpath(no_prof, "prof_s65_25_025.csv"))
+            @test run_main([joinpath(tmpdir, "out_np"), no_prof, table]).value == 1
+            # The checks of read_suite_results apply: the pinned 1-D depth and the energy
+            for (col, text, needle) in
+                (("d_ref", 2400.0, "pinned"), ("energy_res", 2.0e-9, "energy_res"))
+                bad = suite_with_profiles(
+                    "bad_$col"; tamper=Dict("s129_225_025" => (col, text))
+                )
+                err = try
+                    Base.invokelatest(
+                        export_all,
+                        joinpath(tmpdir, "out_$col");
+                        suite_dir=bad,
+                        table_dir=table,
+                    )
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin(needle, err.msg)
+            end
+            @test run_main(String[]).value == 2
+            @test run_main([out, "-x", table]).value == 2
         end
     end
 

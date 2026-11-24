@@ -79,7 +79,9 @@ this measure is meaningful only when the cold-pressed porosity at the surface ex
 # Throws
 - `ArgumentError`: `pg` is `nothing` (`porosity.model = :none`), `nsector < 1`, an unknown
   `measure`, or marker arrays of different lengths.
-- `DomainError`: `rplanet` or `dr` not positive and finite, or a centre not finite.
+- `DomainError`: `rplanet` or `dr` not positive and finite, also after the conversion to
+  `Float64`; a centre not finite; or, for a rock marker, a non-finite `xm` or `ym` or a
+  non-finite value of the measure in use (`dphi_sinter` or `phi_d`).
 """
 function porous_shell_depth(
     xm::AbstractVector{<:Real},
@@ -103,12 +105,27 @@ function porous_shell_depth(
     all(==(n), lengths) || throw(ArgumentError("marker arrays differ in length"))
     R = Float64(require_positive_finite(rplanet, "rplanet"))
     h = Float64(require_positive_finite(dr, "dr"))
+    # A value beyond the Float64 range is Inf or 0 after the conversion
+    require_positive_finite(R, "rplanet as a Float64")
+    require_positive_finite(h, "dr as a Float64")
     isfinite(xcenter) || throw(DomainError(xcenter, "xcenter must be finite"))
     isfinite(ycenter) || throw(DomainError(ycenter, "ycenter must be finite"))
     nbin = max(1, ceil(Int, R / h))
     vals = [Float64[] for _ in 1:nbin, _ in 1:nsector]
     for m in 1:n
         (tm[m] == 1 || tm[m] == 2) || continue
+        isfinite(xm[m]) || throw(DomainError(xm[m], "xm of rock marker $m must be finite"))
+        isfinite(ym[m]) || throw(DomainError(ym[m], "ym of rock marker $m must be finite"))
+        v = measure === :unsintered ? pg.dphi_sinter[m] : pg.phi_d[m]
+        isfinite(v) || throw(
+            DomainError(
+                v,
+                string(
+                    measure === :unsintered ? "dphi_sinter" : "phi_d",
+                    " of rock marker $m must be finite",
+                ),
+            ),
+        )
         dx = xm[m] - xcenter
         dy = ym[m] - ycenter
         r = hypot(dx, dy)
@@ -116,7 +133,7 @@ function porous_shell_depth(
         r > R && continue
         s = min(floor(Int, (atan(dy, dx) + pi) / (2pi) * nsector) + 1, nsector)
         k = min(floor(Int, (R - r) / h) + 1, nbin)
-        push!(vals[k, s], measure === :unsintered ? pg.dphi_sinter[m] : pg.phi_d[m])
+        push!(vals[k, s], v)
     end
     depths = Float64[]
     for s in 1:nsector
@@ -152,6 +169,8 @@ radius of `geometry` and radial bins of half the smaller grid spacing.
 
 # Throws
 - `ArgumentError`: the state has no dry porosity group (`porosity.model = :none`).
+- `DomainError`: from the marker method, for example a rock marker with a non-finite
+  position or value of the measure.
 """
 function porous_shell_depth(
     st::SimulationState,

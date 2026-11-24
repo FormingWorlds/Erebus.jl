@@ -114,7 +114,8 @@ end
     metric_specs(metrics, refs) -> Vector{NamedTuple}
 
 Return the record entry of every metric, in the order of `EXPECTED_METRIC_IDS`, with the
-limits of `PorousShellValidation.expected_metric_limits`: the shell depth within one cell
+units of `PorousShellValidation.metric_units` and the limits of
+`PorousShellValidation.expected_metric_limits`: the shell depth within one cell
 or 15 % of the 1-D depth, whichever is larger, the maximum temperature error at most 0.10
 and the energy residual at most 1e-9; all are fixed before any run.
 
@@ -143,29 +144,22 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
     nx = PSV.NX_REFERENCE
     limits = PSV.expected_metric_limits(; d_shell_ref=refs["shell_depth_nx$(nx)"])
     texts = Dict(
-        "shell_depth_nx$(nx)" => (
-            "Median shell depth of the rock markers against the 1-D shell depth (Nx=$(nx))",
-            "m",
-        ),
-        "tmax_rel_l2_nx$(nx)" => (
-            "Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=$(nx))",
-            "dimensionless",
-        ),
-        "energy_lse_residual_nx$(nx)" =>
-            ("Scaled energy residual of the last thermal step (Nx=$(nx))", "dimensionless"),
+        "shell_depth_nx$(nx)" => "Median shell depth of the rock markers against the 1-D shell depth (Nx=$(nx))",
+        "tmax_rel_l2_nx$(nx)" => "Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=$(nx))",
+        "energy_lse_residual_nx$(nx)" => "Scaled energy residual of the last thermal step (Nx=$(nx))",
     )
     return [
         (;
             id,
             case=PSV.CASE_ID,
-            description=texts[id][1],
+            description=texts[id],
             nx,
             value=metrics[id],
             reference=refs[id],
             atol=limits[id].atol,
             rtol=limits[id].rtol,
             comparison=limits[id].comparison,
-            units=texts[id][2],
+            units=PSV.metric_units(id),
         ) for id in PSV.EXPECTED_METRIC_IDS
     ]
 end

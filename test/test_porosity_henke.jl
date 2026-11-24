@@ -3438,6 +3438,67 @@ end
         @test isapprox(phi.q25, 4375.0; atol=1e-9)
         @test isapprox(Erebus.porous_shell_depth(st, coords, g).median, 2187.5; atol=1e-9)
     end
+    @testset "Method on a state with dx < dy: bins of half the x spacing" begin
+        # 33 x 17 nodes: dx 4375 m, dy 8750 m, bins of min(dx, dy) / 2 = 2187.5 m. Rock
+        # below R - 2187.5 m is sintered: bin 1 is unsintered and bin 2 sintered in every
+        # sector, so each sector depth is 2187.5 m
+        cfg = _hk_cfg("grid.Nx" => 33)
+        st, coords, _ = _hk_state(cfg)
+        g = cfg.geometry
+        @test isapprox(coords.dx, 4375.0; rtol=1e-14)
+        @test isapprox(coords.dy, 8750.0; rtol=1e-14)
+        mk = st.markers
+        r = hypot.(mk.xm .- g.xcenter, mk.ym .- g.ycenter)
+        mk.dphi_sinter .= ifelse.(r .< g.rplanet - 2187.5, 0.02, 0.0)
+        res = Erebus.porous_shell_depth(st, coords, g)
+        @test res.nsector_used == 16
+        # Bins of dy / 2 give sector depths of 0 or 4375 m, whose type-7 lower quartile
+        # is 0, 3281.25 or 4375 m, never 2187.5 m
+        @test isapprox(res.q25, 2187.5; atol=1e-9)
+        @test isapprox(res.median, 2187.5; atol=1e-9)
+        @test isapprox(res.q75, 2187.5; atol=1e-9)
+    end
+    @testset "Non-finite rock markers and a radius beyond Float64 are domain errors" begin
+        xm, ym, tm, pg = _shell_markers(_shell_sharp(2.25dr))
+        # Marker 5 is a mantle marker (tm 1) of sector 1 in bin 1
+        @test tm[5] == 1
+        with_dphi(i, v) = Erebus.PorosityGroup(
+            pg.phi_d, pg.phi0, pg.tkm_max, (d=copy(pg.dphi_sinter); d[i]=v; d)
+        )
+        with_phi(i, v) = Erebus.PorosityGroup(
+            (p=copy(pg.phi_d); p[i]=v; p), pg.phi0, pg.tkm_max, pg.dphi_sinter
+        )
+        for bad in (NaN, Inf)
+            x_bad, y_bad = copy(xm), copy(ym)
+            x_bad[5] = bad
+            y_bad[5] = bad
+            @test_throws DomainError _shell(x_bad, ym, tm, pg)
+            @test_throws DomainError _shell(xm, y_bad, tm, pg)
+            # Only the measure in use is checked
+            @test_throws DomainError _shell(xm, ym, tm, with_dphi(5, bad))
+            @test isapprox(
+                _shell(xm, ym, tm, with_dphi(5, bad); measure=:phi_gt_04).median,
+                2dr;
+                atol=1e-12,
+            )
+            @test_throws DomainError _shell(
+                xm, ym, tm, with_phi(5, bad); measure=:phi_gt_04
+            )
+            @test isapprox(_shell(xm, ym, tm, with_phi(5, bad)).median, 2dr; atol=1e-12)
+            # An air marker (tm 3) with a non-finite position or value is not counted
+            tm_air = copy(tm)
+            tm_air[5] = 3
+            @test isapprox(
+                _shell(x_bad, ym, tm_air, with_dphi(5, bad)).median, 2dr; atol=1e-12
+            )
+        end
+        # A BigFloat radius or bin width beyond the Float64 range, above or below it
+        @test_throws DomainError _shell(xm, ym, tm, pg; R=big"1e400")
+        @test_throws DomainError _shell(xm, ym, tm, pg; dr=big"1e400")
+        @test_throws DomainError _shell(xm, ym, tm, pg; dr=big"1e-400")
+        # A BigFloat within the Float64 range gives the Float64 depth
+        @test isapprox(_shell(xm, ym, tm, pg; R=big"1.0").median, 2dr; atol=1e-12)
+    end
     @testset "Argument guards" begin
         xm, ym, tm, pg = _shell_markers(_shell_sharp(2.25dr))
         @test_throws ArgumentError _shell(xm, ym, tm, nothing)

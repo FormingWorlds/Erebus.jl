@@ -2,7 +2,7 @@
 # Run the full-evolution cases of the porous shell validation (Erebus against the 1-D
 # reference) and write one result row and one profile per case into a folder.
 # Usage: julia --project=. scripts/run_validation_porous_shell_suite.jl <out_dir> [tag ...]
-# Run time: 9 to 71 min per case at Nx 129 on one core; run at most a few at once.
+# Run time: 8 to 71 min per case at Nx 129 on one core; run at most a few at once.
 
 include(joinpath(@__DIR__, "..", "benchmarks", "validation_porous_shell.jl"))
 using .PorousShellValidation:

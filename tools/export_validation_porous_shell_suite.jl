@@ -118,7 +118,8 @@ end
 
 Return the record entry of every suite metric, in the order of `suite_metric_ids`: per run
 the shell depth against the 1-D depth with the tolerance `max(dx, 0.15 d_ref)`, and for
-`Nx >= SUITE_TMAX_NX_MIN` the relative L2 error of the peak temperature, at most 0.10.
+`Nx >= SUITE_TMAX_NX_MIN` the relative L2 error of the peak temperature, at most 0.10;
+the units come from `metric_units`.
 
 Parameters
 ----------
@@ -147,7 +148,6 @@ function suite_metric_specs(results)
             "Median shell depth against the 1-D shell depth, $run",
             r.d_shell,
             r.d_ref,
-            "m",
         )]
         r.nx >= PSV.SUITE_TMAX_NX_MIN && push!(
             entries,
@@ -156,10 +156,9 @@ function suite_metric_specs(results)
                 "Relative L2 error of the binned peak temperature rise, $run",
                 r.tmax_rel_l2,
                 0.0,
-                "dimensionless",
             ),
         )
-        for (id, description, value, reference, units) in entries
+        for (id, description, value, reference) in entries
             lim = PSV.suite_metric_limit(id, r.nx, reference)
             push!(
                 specs,
@@ -173,7 +172,7 @@ function suite_metric_specs(results)
                     atol=lim.atol,
                     rtol=lim.rtol,
                     comparison=lim.comparison,
-                    units,
+                    units=PSV.metric_units(id),
                 ),
             )
         end
