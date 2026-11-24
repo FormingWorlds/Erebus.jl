@@ -4784,7 +4784,9 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
 # Throws
 
     - `DomainError`: if `marknum` is negative or `max_passes` is below 1
-    - `ArgumentError`: if an array is too short or a grid array has the wrong size
+    - `ArgumentError`: if an array is too short or a grid array has the wrong size, if only
+      one of `tkm_floor` and `tk_floor` is given, or if the floor is given with a
+      `DT_conduction` other than `DT`
 """
 function limit_marker_temperature_increment!(
     xm,
@@ -4926,22 +4928,29 @@ The subgrid part `DT - DT_conduction` of the grid increment first stops at the c
 the same nodes. The solve part `DT_conduction` then takes the usual cooling bound, from the
 temperature after the first stage. Each stage keeps the heat where a receiving marker exists.
 
-    - xm, ym, tm, tkm, rhocptotalm: marker positions, types, temperatures and volumetric
-      heat capacities
-    - DT: temperature change at P nodes, the solve part plus the subgrid part
-    - DT_conduction: the solve part of `DT`
-    - tk1, tk2: start and next temperatures at P nodes
+    - xm, ym: marker coordinates [m]
+    - tm: marker type
+    - tkm: marker temperature after subgrid diffusion [K]; the corrections of both stages
+      are written into it
+    - rhocptotalm: marker volumetric heat capacity [J/(m^3 K)]
+    - DT: temperature change at P nodes, the solve part plus the subgrid part [K]
+    - DT_conduction: the solve part of `DT` [K]
+    - tk1, tk2: start and next temperatures at P nodes [K]
     - DEFICIT, CAPACITY: scratch arrays at P nodes
     - marknum: total number of markers in use
-    - tkm_floor: marker temperatures before subgrid diffusion
+    - coords: grid coordinates
+    - tkm_floor: marker temperatures before subgrid diffusion [K]
     - w3d: marker out-of-plane length under the spherical metric [m], or `nothing`
 
 # Returns
 
-    - named tuple: `n_limited`, `heat_rejected` and `heat_lost`, summed over both stages
+    - named tuple: `n_limited`, the number of limits (a marker limited in both stages
+      counts twice), and `heat_rejected` and `heat_lost` [J/m^3, times `w3d` when one is
+      given], summed over both stages
 
 # Throws
 
+    - `ArgumentError`: if `DT_conduction` does not have the size of `DT`
     - the errors of `limit_marker_temperature_increment!`
 """
 function limit_relaxed_marker_temperatures!(

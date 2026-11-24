@@ -202,7 +202,8 @@ $(SIGNATURES)
 The relaxation runs when `solver.dsubgridt > 0` and the time step is positive. From step 2
 the limit acts: in two stages with the cold floor when the relaxation runs
 (`limit_relaxed_marker_temperatures!`), else in one stage without it. At step 1 the marker
-update takes the grid temperature, so the relaxation changes only the grid increment `DT`.
+update sets the markers to the grid temperature, which replaces the relaxed marker
+temperatures; the relaxation then leaves only its change of `DT`.
 """
 function _relax_and_limit_marker_temperatures!(
     state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig, TKSUM, RHOCPSUM
