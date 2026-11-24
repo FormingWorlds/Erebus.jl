@@ -151,7 +151,7 @@ A pass means that a point lies between the lines of its grid.
 <!-- VALIDATION_RECORD_START: porous_shell_suite -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `ef436b46`, config SHA-256 `bbebaa4bea8b`)
+**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `f0cec3dd`, config SHA-256 `bbebaa4bea8b`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
