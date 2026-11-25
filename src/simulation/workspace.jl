@@ -275,6 +275,8 @@ mutable struct SimulationWorkspaces
     hr_step_start_timestep::Int
     plastic_cycle::PlasticCycleTracker
     anderson::AndersonHistory
+    "rock-marker sums of the fixed-surface pass (`allocate_rock_thermal_sums`), or `nothing`"
+    rock_sums::Union{Nothing,NamedTuple}
 end
 
 """
@@ -325,6 +327,7 @@ function reset_workspaces_for_grid!(
     ws.fractured_cells = zeros(Bool, coords.Ny, coords.Nx)
     ws.fractured_cells_prev = zeros(Bool, coords.Ny, coords.Nx)
     ws.hr_step_start_timestep = -1
+    ws.rock_sums === nothing || (ws.rock_sums = allocate_rock_thermal_sums(coords))
 
     return ws
 end

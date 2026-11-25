@@ -241,6 +241,11 @@ function setup_simulation_markers_and_state(
         Q_lat_grid = zeros(Float64, coords.Ny1, coords.Nx1)
         Q_seg_grid = zeros(Float64, coords.Ny1, coords.Nx1)
         Q_fluid_grid = zeros(Float64, coords.Ny1, coords.Nx1)
+        fixed_tk = if cfg.thermodynamics.surface_temperature === :fixed
+            zeros(Bool, coords.Ny1, coords.Nx1)
+        else
+            nothing
+        end
 
         grids = GridArrays(
             ETA,
@@ -327,6 +332,7 @@ function setup_simulation_markers_and_state(
             Q_seg_grid,
             Q_fluid_grid,
             Q_metric,
+            fixed_tk,
         )
 
         markers = init_marker_arrays(marknum, cfg, coords; rng=rng, initial_time=timesum)
@@ -406,6 +412,7 @@ function setup_simulation_markers_and_state(
             M_escaped_species,
             nothing,
             nothing,
+            zero_fixed_surface_counts(),
         )
 
         state = SimulationState(
@@ -538,6 +545,11 @@ function setup_simulation_workspaces(
         -1,
         PlasticCycleTracker(),
         AndersonHistory(0, 0),
+        if cfg.thermodynamics.surface_temperature === :fixed
+            allocate_rock_thermal_sums(coords)
+        else
+            nothing
+        end,
     )
 end
 

@@ -759,7 +759,12 @@ end
         P = PorousShellValidation
         Nx = 65
         cfg = P.make_porous_shell_config(;
-            Nx, phi_init=0.25, t_form_yr=2.5e6, n_steps=20, dt_yr=5.0e4
+            Nx,
+            phi_init=0.25,
+            t_form_yr=2.5e6,
+            n_steps=20,
+            dt_yr=5.0e4,
+            surface_temperature=:sticky_air,
         )
         st = mktempdir() do d
             redirect_stdout(devnull) do

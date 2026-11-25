@@ -10,7 +10,10 @@ end
 Base.showerror(io::IO, e::CheckpointError) = print(io, "CheckpointError: ", e.msg)
 
 """
-Unified container for all 84 staggered Eulerian mesh arrays.
+Unified container for all 85 staggered Eulerian mesh arrays.
+
+`fixed_tk` marks the P nodes with a fixed temperature under
+`thermodynamics.surface_temperature = :fixed` and is `nothing` otherwise.
 """
 struct GridArrays
     ETA::Matrix{Float64}
@@ -97,6 +100,7 @@ struct GridArrays
     Q_seg_grid::Matrix{Float64}
     Q_fluid_grid::Matrix{Float64}
     Q_metric::Union{Nothing,Matrix{Float64}}
+    fixed_tk::Union{Nothing,Matrix{Bool}}
 end
 
 Base.keys(::GridArrays) = fieldnames(GridArrays)
@@ -142,6 +146,15 @@ end
 
 """
 Diagnostic and physical mass accumulators across global simulation evolution.
+
+`fixed_surface_counts` holds the counts of the last fixed-surface pass
+(`thermodynamics.surface_temperature = :fixed`, see `apply_fixed_surface_temperature!`):
+`n_fixed` fixed P nodes, `n_norock` free nodes without rock made fixed, `n_rock_out` rock
+markers outside `rplanet`, and `n_norock_steps` passes with `n_norock > 0`.
+A checkpoint stores the counts with the accumulators, so they cover the steps since the
+start of the run, across restarts. `load_simulation_state` sets them to 0 when the
+`accumulators` entry of the checkpoint is missing or does not load as
+`SimulationAccumulators`; they then cover the steps since that restart.
 """
 mutable struct SimulationAccumulators
     M_vent_total::Float64
@@ -164,6 +177,21 @@ mutable struct SimulationAccumulators
     M_escaped_species::Union{Nothing,Dict{Symbol,Float64}}
     core_budgets::Any
     regional_mineral_modes::Any
+    fixed_surface_counts::@NamedTuple{
+        n_fixed::Int, n_norock::Int, n_rock_out::Int, n_norock_steps::Int
+    }
+end
+
+"""
+Return the counts of the fixed-surface pass before its first call.
+
+$(SIGNATURES)
+
+# Returns
+- `NamedTuple`: `n_fixed`, `n_norock`, `n_rock_out` and `n_norock_steps`, all 0
+"""
+function zero_fixed_surface_counts()
+    return (; n_fixed=0, n_norock=0, n_rock_out=0, n_norock_steps=0)
 end
 
 function Base.copy(a::SimulationAccumulators)
@@ -188,6 +216,7 @@ function Base.copy(a::SimulationAccumulators)
         a.M_escaped_species === nothing ? nothing : copy(a.M_escaped_species),
         a.core_budgets === nothing ? nothing : deepcopy(a.core_budgets),
         a.regional_mineral_modes === nothing ? nothing : deepcopy(a.regional_mineral_modes),
+        a.fixed_surface_counts,
     )
 end
 
@@ -371,7 +400,8 @@ function snapshot_step_state!(
     ws::SimulationWorkspaces,
 ) where {G}
     if size(snap.grids.pr) != size(state.grids.pr) ||
-        (snap.grids.Q_metric === nothing) != (state.grids.Q_metric === nothing)
+        (snap.grids.Q_metric === nothing) != (state.grids.Q_metric === nothing) ||
+        (snap.grids.fixed_tk === nothing) != (state.grids.fixed_tk === nothing)
         snap.grids = copy(state.grids)
     else
         copy_grid_arrays!(snap.grids, state.grids)

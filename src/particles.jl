@@ -4644,6 +4644,8 @@ bilinear weights, also under the spherical metric.
     - phi_dry: dry porosity of the markers (Henke et al. 2012), or `nothing`
     - rhocptotalm, ktotalm: marker volumetric heat capacity and conductivity of the step;
       an entry that is not positive, or `nothing`, uses the constitutive value
+    - fixed: Bool mask of the P nodes with a fixed temperature, or `nothing`; `DT` does
+      not change there, so the relaxation heat of those nodes is boundary heat
 
 # Returns
 
@@ -4674,6 +4676,7 @@ function apply_subgrid_temperature_diffusion!(
     phi_dry=nothing,
     rhocptotalm=nothing,
     ktotalm=nothing,
+    fixed=nothing,
 )
     (isfinite(dsubgridt) && dsubgridt >= 0.0) ||
         throw(DomainError(dsubgridt, "dsubgridt must be finite and non-negative"))
@@ -4738,6 +4741,7 @@ function apply_subgrid_temperature_diffusion!(
     end
     # compute DTsubgrid=TKSUM/RHOCPSUM and update temperature field at P nodes
     for j in 1:1:Nx1, i in 1:1:Ny1
+        fixed !== nothing && fixed[i, j] && continue
         if RHOCPSUM[i, j] > 0.0
             DT[i, j] -= TKSUM[i, j] / RHOCPSUM[i, j]
         end
@@ -4782,6 +4786,8 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
       temperatures of the step start; when given, the bound is the floor
       `min(tkm_floor[m], min(tk_floor nodes))` alone, and `DT` must hold only the part of
       subgrid diffusion (see `limit_relaxed_marker_temperatures!`)
+    - fixed: Bool mask of the P nodes with a fixed temperature, or `nothing`; these nodes
+      give no capacity, so the heat rejected there counts in `heat_lost`
 
 # Returns
 
@@ -4813,8 +4819,11 @@ function limit_marker_temperature_increment!(
     w3d=nothing,
     tkm_floor=nothing,
     tk_floor=nothing,
+    fixed=nothing,
 )
     marknum >= 0 || throw(DomainError(marknum, "marknum must be non-negative"))
+    (fixed === nothing || size(fixed) == size(DT)) ||
+        throw(ArgumentError("fixed must have the size of the P grid"))
     (tkm_floor === nothing) == (tk_floor === nothing) ||
         throw(ArgumentError("tkm_floor and tk_floor must be given together"))
     (tkm_floor === nothing || length(tkm_floor) >= marknum) ||
@@ -4890,6 +4899,11 @@ function limit_marker_temperature_increment!(
                 interpolate_add_to_grid!(i, j, weights, marker_heat(m), CAPACITY)
             end
         end
+        if fixed !== nothing
+            @inbounds for k in eachindex(fixed)
+                fixed[k] && (CAPACITY[k] = 0.0)
+            end
+        end
         n_limited == 0 && return (; n_limited, heat_rejected, heat_lost)
         any_limited || break
         @inbounds for j in axes(DEFICIT, 2), i in axes(DEFICIT, 1)
@@ -4949,6 +4963,8 @@ temperature after the first stage. Each stage keeps the heat where a receiving m
     - coords: grid coordinates
     - tkm_floor: marker temperatures before subgrid diffusion [K]
     - w3d: marker out-of-plane length under the spherical metric [m], or `nothing`
+    - fixed: Bool mask of the fixed-temperature P nodes, or `nothing`; passed to both
+      stages
 
 # Returns
 
@@ -4980,6 +4996,7 @@ function limit_relaxed_marker_temperatures!(
     coords::GridCoordinates=default_grid_coordinates(),
     tkm_floor::AbstractVector,
     w3d=nothing,
+    fixed=nothing,
 )
     size(DT) == size(DT_conduction) ||
         throw(ArgumentError("DT_conduction must have the size of DT"))
@@ -4999,6 +5016,7 @@ function limit_relaxed_marker_temperatures!(
         w3d=w3d,
         tkm_floor=tkm_floor,
         tk_floor=tk1,
+        fixed=fixed,
     )
     limit_stats = limit_marker_temperature_increment!(
         xm,
@@ -5014,6 +5032,7 @@ function limit_relaxed_marker_temperatures!(
         coords=coords,
         DT_conduction=DT_conduction,
         w3d=w3d,
+        fixed=fixed,
     )
     return (;
         n_limited=floor_stats.n_limited + limit_stats.n_limited,

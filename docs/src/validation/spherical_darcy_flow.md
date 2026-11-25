@@ -286,7 +286,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_darcy_flow -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_darcy_flow.toml` (Source commit `7b4a99c0`, config SHA-256 `2d95fec4eb17`)
+**Validation record**: `benchmarks/records/spherical_darcy_flow.toml` (Source commit `b16eaac1`, config SHA-256 `98b074f3e26f`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |

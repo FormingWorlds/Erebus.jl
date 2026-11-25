@@ -248,6 +248,7 @@ function telescope_domain!(
         Q_seg_grid,
         Q_fluid_grid,
         Q_metric,
+        g.fixed_tk === nothing ? nothing : zeros(Bool, coords_new.Ny1, coords_new.Nx1),
     )
 
     telescope_marker_arrays!(

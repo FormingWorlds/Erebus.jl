@@ -190,7 +190,9 @@ $(SIGNATURES)
     - state: simulation state; marker temperatures and the grid increment `DT` change;
       `state.grids.DT0` must hold the solve increment
     - coords: grid coordinates
-    - cfg: configuration (`solver.dsubgridt`, `geometry.spherical_metric`)
+    - cfg: configuration (`solver.dsubgridt`, `geometry.spherical_metric`,
+      `thermodynamics.surface_temperature`; with `:fixed` the nodes of
+      `state.grids.fixed_tk` keep `DT = 0` and give the limit no capacity)
     - TKSUM, RHOCPSUM: scratch arrays at P nodes
 
 # Returns
@@ -217,6 +219,7 @@ function _relax_and_limit_marker_temperatures!(
     core = state.markers.core
     marknum = length(state.markers)
     subgrid_on = cfg.solver.dsubgridt > 0.0 && state.dt > 0.0 && state.timestep > 1
+    fixed = cfg.thermodynamics.surface_temperature === :fixed ? g.fixed_tk : nothing
     tkm_pre = subgrid_on ? core.tkm[1:marknum] : nothing
     apply_subgrid_temperature_diffusion!(
         core.xm,
@@ -236,6 +239,7 @@ function _relax_and_limit_marker_temperatures!(
         phi_dry=dry_porosity(state.markers),
         rhocptotalm=core.rhocptotalm,
         ktotalm=core.ktotalm,
+        fixed=fixed,
     )
     # The first step sets markers from the grid, without an increment.
     state.timestep > 1 || return nothing
@@ -257,6 +261,7 @@ function _relax_and_limit_marker_temperatures!(
             coords=coords,
             tkm_floor=tkm_pre,
             w3d=w3d,
+            fixed=fixed,
         )
     else
         limit_marker_temperature_increment!(
@@ -272,6 +277,7 @@ function _relax_and_limit_marker_temperatures!(
             marknum;
             coords=coords,
             w3d=w3d,
+            fixed=fixed,
         )
     end
     return nothing

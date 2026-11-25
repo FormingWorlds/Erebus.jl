@@ -232,6 +232,7 @@ Base.@kwdef struct ThermalConfig
     surface_radiation::Bool = false
     emissivity::Float64 = 0.9
     sigma_sb::Float64 = 5.670374419e-8
+    surface_temperature::Symbol = :sticky_air
 end
 
 """
@@ -1681,6 +1682,53 @@ function _validate_spherical_flow(cfg::SimulationConfig)
 end
 
 """
+Check `thermodynamics.surface_temperature` and the options that it excludes.
+
+$(SIGNATURES)
+
+`:fixed` holds the P nodes outside `geometry.rplanet` at the disk temperature, so it needs
+the disk on and a planet radius and centre that do not change; options that set their own
+surface temperature are refused.
+
+# Arguments
+- `cfg`: simulation configuration
+
+# Returns
+- `nothing`
+
+# Throws
+- `ArgumentError`: if the value is not `:sticky_air` or `:fixed`, or if `:fixed` is set
+  without `disk.enabled` or together with `accretion`, `telescoping`, `venting`,
+  `atmosphere` or `thermodynamics.surface_radiation`
+"""
+function _validate_surface_temperature(cfg)
+    mode = cfg.thermodynamics.surface_temperature
+    mode in (:sticky_air, :fixed) || throw(
+        ArgumentError(
+            "thermodynamics.surface_temperature must be :sticky_air or :fixed, got :$mode",
+        ),
+    )
+    mode === :fixed || return nothing
+    cfg.disk.enabled || throw(
+        ArgumentError("thermodynamics.surface_temperature = :fixed needs disk.enabled")
+    )
+    for (name, on) in (
+        ("accretion.active", cfg.accretion.active),
+        ("telescoping.active", cfg.telescoping.active),
+        ("venting.active", cfg.venting.active),
+        ("atmosphere.active", cfg.atmosphere.active),
+        ("thermodynamics.surface_radiation", cfg.thermodynamics.surface_radiation),
+    )
+        on && throw(
+            ArgumentError(
+                "thermodynamics.surface_temperature = :fixed cannot be used with $name"
+            ),
+        )
+    end
+    return nothing
+end
+
+"""
 Validates physical bounds and numerical consistency of a `SimulationConfig`.
 
 $(SIGNATURES)
@@ -1826,6 +1874,7 @@ function validate_config(cfg::SimulationConfig)
     @check_positive_finite cfg.thermodynamics.fluid_viscosity_eta0
     @check_unit_interval cfg.thermodynamics.emissivity
     @check_positive_finite cfg.thermodynamics.sigma_sb
+    _validate_surface_temperature(cfg)
 
     # Disk checks
     cfg.disk.model in Set([:fixed, :monotonic, :class1_to_class2, :class0_to_class2]) ||

@@ -356,15 +356,50 @@ const SEED_DEFAULT = 42
 
 """
     make_porous_shell_config(; Nx, phi_init, t_form_yr, n_steps, dt_yr,
-                             k_air=nothing, seed=42) -> SimulationConfig
+                             k_air=nothing, seed=42,
+                             surface_temperature=:fixed) -> SimulationConfig
 
 Erebus configuration of the porous shell case: a dry planetesimal of radius `R_PLANET`
 in a box of `L_BOX`, spherical metric, 26Al heating from the CAI ratio `RATIO_AL_L16`,
 `porosity.model = :henke2012`, a fixed time step, no melting, reactions or pore water.
-The sticky air stays at `T_SPACE` (fixed disk temperature, heat capacity `RHOCP_AIR`).
-`k_air = nothing` gives the air the conductivity of the cold-pressed surface rock, so
-that the face between air and rock conducts as the rock; pass 3000.0 for the value that
-a configuration file gives.
+With `surface_temperature = :fixed` the P nodes outside `R_PLANET` hold the disk
+temperature `T_SPACE`, the surface of the 1-D model, and the nodes inside take their
+properties from the rock markers only. With `:sticky_air` the air stays near `T_SPACE`
+through its heat capacity `RHOCP_AIR`. `k_air = nothing` gives the air the conductivity
+of the cold-pressed surface rock, so that the face between air and rock conducts as the
+rock; pass 3000.0 for the value that a configuration file gives.
+
+Parameters
+----------
+Nx : Int
+    Basic grid resolution in x and y, at least 5.
+phi_init : Float64
+    Initial porosity, in [0, 1].
+t_form_yr : Float64
+    Formation time after the first solids [yr], at least 0.
+n_steps : Int
+    Number of time steps, at least 1.
+dt_yr : Float64
+    Time step [yr], positive.
+k_air : Union{Nothing,Float64}, optional
+    Air conductivity [W/(m K)], or `nothing` for the matched air (default).
+seed : Int, optional
+    Seed of the marker positions (default `SEED_DEFAULT`).
+surface_temperature : Symbol, optional
+    `thermodynamics.surface_temperature`, `:fixed` (default) or `:sticky_air`.
+
+Returns
+-------
+SimulationConfig
+    Configuration of the case.
+
+Raises
+------
+DomainError
+    If `Nx < 5`, `n_steps < 1`, `dt_yr` or `t_form_yr` is out of range, `phi_init` is
+    outside [0, 1] or `k_air` is not positive and finite.
+ArgumentError
+    If `surface_temperature` is neither `:fixed` nor `:sticky_air`.
 """
 function make_porous_shell_config(;
     Nx::Int,
@@ -374,7 +409,13 @@ function make_porous_shell_config(;
     dt_yr::Float64,
     k_air::Union{Nothing,Float64}=nothing,
     seed::Int=SEED_DEFAULT,
+    surface_temperature::Symbol=:fixed,
 )::SimulationConfig
+    surface_temperature in (:fixed, :sticky_air) || throw(
+        ArgumentError(
+            "surface_temperature must be :fixed or :sticky_air, got :$surface_temperature",
+        ),
+    )
     Nx >= 5 || throw(DomainError(Nx, "Grid resolution Nx must be >= 5"))
     n_steps >= 1 || throw(DomainError(n_steps, "Number of steps n_steps must be >= 1"))
     (isfinite(dt_yr) && dt_yr > 0.0) ||
@@ -417,6 +458,7 @@ function make_porous_shell_config(;
             phim0=PHIM0,
             thermal_buoyancy=false,
             surface_radiation=false,
+            surface_temperature=surface_temperature,
         ),
         materials=MaterialConfig(;
             ksolidm=SVector{3,Float64}([K_SOL, K_SOL, k_a]),
@@ -519,7 +561,7 @@ function radial_bin_medians(
 end
 
 """
-    thermal_step_energy_residual(g, dt, dx, dy)
+    thermal_step_energy_residual(g, dt, dx, dy; fixed=nothing)
 
 Return the relative residual of the energy identity of the last thermal step held in the
 grid fields `g`. Over the interior P nodes the stored heat is
@@ -531,16 +573,23 @@ the right-hand side of `assemble_thermal_lse!`. The boundary nodes copy their ne
 `RHOCP` changes the stored heat of a node by more than the whole planet, so a scale from
 the sums alone would cancel.
 
+With a `fixed` mask (`thermodynamics.surface_temperature = :fixed`) the sums run over the
+free nodes only, and the heat that enters the free nodes through the faces to fixed nodes,
+`dt sum(K (tk2_fixed - tk2) / h^2) dx dy` with the face conductivity `KX` or `KY` of
+`g`, counts as a source. Its absolute value enters the scale.
+
 Parameters
 ----------
 g : Grids or NamedTuple
     Grid fields after a thermal solve: `tk1`, `tk2` [K], `RHOCP` [J/(m^3 K)], `HR`, `HA`,
     `HS`, `DHP`, `Q_metric` (or `nothing`), `Q_lat_grid`, `Q_seg_grid`, `Q_fluid_grid`
-    [W/m^3].
+    [W/m^3]; with `fixed` also `KX`, `KY` [W/(m K)].
 dt : Float64
     Time step of the thermal solve [s].
 dx, dy : Float64
     Grid spacing [m].
+fixed : Union{Nothing,AbstractMatrix{Bool}}
+    Fixed-temperature P nodes, or `nothing` for all interior nodes.
 
 Returns
 -------
@@ -552,10 +601,14 @@ Raises
 ArgumentError
     If the scale is not positive and finite (no temperature change and no heat).
 """
-function thermal_step_energy_residual(g, dt::Float64, dx::Float64, dy::Float64)
+function thermal_step_energy_residual(
+    g, dt::Float64, dx::Float64, dy::Float64; fixed=nothing
+)
     Ny1, Nx1 = size(g.tk1)
     stored = source = stored_abs = source_abs = 0.0
+    isfixed(i, j) = fixed !== nothing && fixed[i, j]
     for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+        isfixed(i, j) && continue
         de = g.RHOCP[i, j] * (g.tk2[i, j] - g.tk1[i, j])
         q =
             g.HR[i, j] +
@@ -566,6 +619,13 @@ function thermal_step_energy_residual(g, dt::Float64, dx::Float64, dy::Float64)
             g.Q_lat_grid[i, j] +
             g.Q_seg_grid[i, j] +
             g.Q_fluid_grid[i, j]
+        if fixed !== nothing
+            T = g.tk2[i, j]
+            isfixed(i, j - 1) && (q += g.KX[i, j - 1] * (g.tk2[i, j - 1] - T) / dx^2)
+            isfixed(i, j + 1) && (q += g.KX[i, j] * (g.tk2[i, j + 1] - T) / dx^2)
+            isfixed(i - 1, j) && (q += g.KY[i - 1, j] * (g.tk2[i - 1, j] - T) / dy^2)
+            isfixed(i + 1, j) && (q += g.KY[i, j] * (g.tk2[i + 1, j] - T) / dy^2)
+        end
         stored += de
         source += q
         stored_abs += abs(de)
@@ -613,27 +673,70 @@ function check_run_clock(st, cfg::SimulationConfig)
 end
 
 """
+    check_fixed_surface_counts(st, cfg)
+
+Check that no step of a finished run with `thermodynamics.surface_temperature = :fixed`
+made a free P node without rock fixed: `n_norock` of the last step and `n_norock_steps`
+of the run in `st.accumulators.fixed_surface_counts` are both 0. Such a node would hold
+the disk temperature inside the planet, so the comparison with the 1-D model would not
+hold. A run with `:sticky_air` passes. The counts cover the steps since the start of the
+run, across restarts from a checkpoint that stores them; a checkpoint whose accumulators
+do not load restarts them at 0, and the check then covers the steps since that restart.
+
+Parameters
+----------
+st : SimulationState or NamedTuple
+    Final state of `simulation_loop`; `accumulators.fixed_surface_counts` is read.
+cfg : SimulationConfig
+    Configuration of the run, from `make_porous_shell_config`.
+
+Returns
+-------
+Nothing
+
+Raises
+------
+ErrorException
+    If `n_norock` or `n_norock_steps` is above 0.
+"""
+function check_fixed_surface_counts(st, cfg::SimulationConfig)
+    cfg.thermodynamics.surface_temperature === :fixed || return nothing
+    c = st.accumulators.fixed_surface_counts
+    (c.n_norock == 0 && c.n_norock_steps == 0) || error(
+        "$(c.n_norock_steps) steps made free P nodes without rock fixed " *
+        "($(c.n_norock) in the last step)",
+    )
+    return nothing
+end
+
+"""
     run_porous_shell_case(; Nx, phi_init, t_form_yr, n_steps, dt_yr, k_air=nothing,
-                          seed=42, Nr=2000, reference=nothing) -> NamedTuple
+                          seed=42, Nr=2000, reference=nothing,
+                          surface_temperature=:fixed,
+                          run_loop=simulation_loop) -> NamedTuple
 
 Run the Erebus case and the 1-D reference with the same time step and number of steps,
 and compare them. The shell depth of Erebus is `Erebus.porous_shell_depth` with radial
 bins of half a cell. The profiles of the maximum temperature and of the porosity are
 medians of the rock markers in radial bins of half a cell, compared with the 1-D cell at
-the bin centre. The energy residual is `thermal_step_energy_residual` of the last step.
+the bin centre. The energy residual is `thermal_step_energy_residual` of the last step,
+over the free nodes with `surface_temperature = :fixed`.
 
 `reference` is a `solve_porous_sphere` result of the same case (`stop_cold = false`),
-or `nothing` to compute it here with `Nr` cells.
+or `nothing` to compute it here with `Nr` cells. `run_loop(cfg; output_path)` runs
+Erebus and returns the final state; a test passes a stand-in to change that state.
 
 Returns `(; dx, d_shell, d_shell_q25, d_shell_q75, d_shell_ref, d_shell_error_cells,
-tmax_rel_l2, phi_rms, T_peak, T_peak_ref, energy_lse_residual, r, tmax, tmax_ref, phi,
-phi_ref, reference)`: depths [m], the relative L2 norm of `T_max - T_SPACE`, the rms
-porosity difference [-], peak temperatures [K], the relative energy residual of the last
-thermal step [-], the binned profiles and the full 1-D result.
+tmax_rel_l2, phi_rms, T_peak, T_peak_ref, energy_lse_residual, fixed_surface_counts, r,
+tmax, tmax_ref, phi, phi_ref, reference)`: depths [m], the relative L2 norm of
+`T_max - T_SPACE`, the rms porosity difference [-], peak temperatures [K], the relative
+energy residual of the last thermal step [-], the counts of the last fixed-surface pass
+(all 0 with `:sticky_air`), the binned profiles and the full 1-D result.
 
-Raises `DomainError` for the arguments that `make_porous_shell_config` rejects, and an
-`ErrorException` from `check_run_clock` when the run did not take `n_steps` steps of
-`dt_yr`.
+Raises `DomainError` and `ArgumentError` for the arguments that `make_porous_shell_config`
+rejects, and an `ErrorException` from `check_run_clock` when the run did not take
+`n_steps` steps of `dt_yr`, and from `check_fixed_surface_counts` when a step made a node
+without rock fixed.
 """
 function run_porous_shell_case(;
     Nx::Int,
@@ -645,18 +748,23 @@ function run_porous_shell_case(;
     seed::Int=SEED_DEFAULT,
     Nr::Int=2000,
     reference=nothing,
+    surface_temperature::Symbol=:fixed,
+    run_loop=simulation_loop,
 )
-    cfg = make_porous_shell_config(; Nx, phi_init, t_form_yr, n_steps, dt_yr, k_air, seed)
+    cfg = make_porous_shell_config(;
+        Nx, phi_init, t_form_yr, n_steps, dt_yr, k_air, seed, surface_temperature
+    )
     st = mktempdir() do tmpdir
         redirect_stdout(devnull) do
             redirect_stderr(devnull) do
                 with_logger(NullLogger()) do
-                    return simulation_loop(cfg; output_path=tmpdir)
+                    return run_loop(cfg; output_path=tmpdir)
                 end
             end
         end
     end
     check_run_clock(st, cfg)
+    check_fixed_surface_counts(st, cfg)
     ref = if reference === nothing
         solve_porous_sphere(;
             R=R_PLANET,
@@ -696,7 +804,10 @@ function run_porous_shell_case(;
         phi_rms=sqrt(sum(abs2, phi .- phi_ref) / length(phi)),
         T_peak=maximum(pg.tkm_max[rock]),
         T_peak_ref=ref.T_peak,
-        energy_lse_residual=thermal_step_energy_residual(st.grids, st.dt, dx, dx),
+        energy_lse_residual=thermal_step_energy_residual(
+            st.grids, st.dt, dx, dx; fixed=st.grids.fixed_tk
+        ),
+        fixed_surface_counts=st.accumulators.fixed_surface_counts,
         r=rc,
         tmax,
         tmax_ref,

@@ -20,7 +20,11 @@ The box "Test details" at the end of each case gives the reference, the toleranc
 
 **The test set-up.**
 
-- A planetesimal of radius $R_p = 20$ km is in a square box of 48 km, filled with sticky air at 290 K.
+- A planetesimal of radius $R_p = 20$ km is in a square box of 48 km, with air markers outside the planet.
+- The grid nodes outside $R_p$ hold the disk temperature of 290 K (`thermodynamics.surface_temperature = :fixed`).
+  The nodes inside take their heat capacity, conductivity and heat from the rock markers alone.
+  The surface temperature acts at $R_p$, as in the 1-D model.
+  The [numerics page](../explanations/discretization_numerics.md) explains this option.
 - `Nx` is the number of grid nodes on each side of the box.
   The cell size $\Delta x$ is 1500 m at `Nx = 33`, 750 m at `Nx = 65` and 375 m at `Nx = 129`.
 - The rock starts at 290 K with the initial porosity $\phi_{init}$ and is cold pressed by its own weight.
@@ -28,8 +32,10 @@ The box "Test details" at the end of each case gives the reference, the toleranc
   The body forms at the time $t_{form}$ after them.
 - Melting, reactions, pore water and thermal buoyancy are off.
   Heat conduction, radiogenic heat, cold pressing and sintering are the only processes.
-- The sticky air has the conductivity of the porous surface rock (see the known limit below) and no thermal expansion.
-  Its heat capacity of $3 \times 10^{10}$ J/(m³ K) holds it at 290 K.
+- A free node without rock markers within 1.5 cells of $R_p$ becomes a fixed node at 290 K for that step.
+  The validation check fails the run after it ends when any step made such a node fixed.
+  A free node without rock deeper in the planet stops the run at once with an error.
+  No run on this page fails this check.
 
 ---
 
@@ -38,8 +44,6 @@ The box "Test details" at the end of each case gives the reference, the toleranc
 **Why this check exists.**
 The time loop could give the wrong conductivity, heat capacity or heat to porous rock, or pass the wrong temperature to the sintering step.
 The shell would then have the wrong depth, also where each law passes its own unit test.
-For example, suppose the code heated porous rock as much as solid rock of the same volume.
-The shell at `Nx = 65` would then be 2625 m deep in place of 5250 m, and the test fails.
 
 **What it tests.**
 A body with $\phi_{init} = 0.25$ forms at $t_{form} = 2.5$ Myr.
@@ -84,13 +88,14 @@ A pass means that the mark of Erebus at `Nx = 65` lies within 1 cell of the mark
 The mark at `Nx = 129` shows the difference on a finer grid; the next case records it.
 
 **Known limit.**
-With the matched air, Erebus gives a shell that is deeper than in the 1-D model by 0.7 to 1.0 cells, in every case on this page.
-At $\phi_{init} = 0.5$ the error is 0.99 cells, so this run passes its tolerance of 375 m by only 2.5 m.
-The error in metres halves when the cell size halves, so the difference comes from the grid.
-Near the surface the Erebus rock stays colder than in the 1-D model (panel a).
-The cause is the large heat capacity of the sticky air in this case.
-It holds the grid nodes that mix rock and air at 290 K, so the cold surface lies inside $R_p$.
-With an air heat capacity equal to that of rock, the shell at `Nx = 65` is 0.62 cells too thin instead of 0.88 cells too deep.
+The shell of Erebus differs from the shell of the 1-D model by less than half a cell in every case on this page.
+In the CI case the shell at `Nx = 65` is 4500 m deep, 0.12 cells thinner than the 1-D shell.
+In the run to the end of sintering the 1-D shell is 4560 m deep.
+There the Erebus shell is 4875 m deep at `Nx = 65`, 0.42 cells (315 m) too deep.
+At `Nx = 129` it is 4500 m deep, 0.16 cells (60 m) too thin.
+The error in metres falls by more than half when the cell size halves, but it changes sign.
+These 2 grids therefore give no clean order of convergence.
+Erebus measures the shell in radial bins of half a cell, so its depth moves in steps of 375 m at `Nx = 65` and 187.5 m at `Nx = 129`.
 
 At the edge of the shell the 1-D model has a peak temperature of 700.4 K in the last sintered cell and 699.998 K in the next one.
 The depth of the shell is therefore the depth where the peak temperature reached 700 K.
@@ -119,7 +124,7 @@ We run 6 bodies of 20 km to the time when the 1-D model stops sintering, with st
 5 runs use `Nx = 129`, and the main case also runs at `Nx = 65`.
 The cases cover 3 formation times and 3 initial porosities.
 They have a shell of at least 4 cells at `Nx = 129` in the 1-D model.
-One run uses the conductivity of the sticky air that a configuration file gives, 3000 W/(m K).
+One run gives the air markers the conductivity that a configuration file gives, 3000 W/(m K).
 
 **How we know the right answer.**
 Each run has its own 1-D model run with the same steps.
@@ -151,35 +156,32 @@ A pass means that a point lies between the lines of its grid.
 <!-- VALIDATION_RECORD_START: porous_shell_suite -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `7b4a99c0`, config SHA-256 `dde8ccf0bfb3`)
+**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `bf3e2d91`, config SHA-256 `ecf4b4c10ebe`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `s65_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `5.2500e+03` | `4.5600e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
-| `s65_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `5.2300e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `s129_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `4.8750e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `2.7900e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `s129_225_025` | Median shell depth against the 1-D shell depth, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `2.6250e+03` | `2.3400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_225_025` | Relative L2 error of the binned peak temperature rise, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `3.0700e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `s129_175_010` | Median shell depth against the 1-D shell depth, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.4375e+03` | `2.1700e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_175_010` | Relative L2 error of the binned peak temperature rise, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.7300e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `s129_25_050` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `2.8125e+03` | `2.4400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_25_050` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `3.4000e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `s129_25_025_k` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `5.0625e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_25_025_k` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `4.8300e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s65_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `4.8750e+03` | `4.5600e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
+| `s65_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `1.1500e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `4.5000e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `2.6000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_225_025` | Median shell depth against the 1-D shell depth, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `2.2500e+03` | `2.3400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_225_025` | Relative L2 error of the binned peak temperature rise, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `3.1000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_175_010` | Median shell depth against the 1-D shell depth, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.2500e+03` | `2.1700e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_175_010` | Relative L2 error of the binned peak temperature rise, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `1.5000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_050` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `2.4375e+03` | `2.4400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_25_050` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `4.0000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_025_k` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `4.5000e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_25_025_k` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `2.6000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: porous_shell_suite -->
 ```
 
 **Known limit.**
-A configuration file gives the sticky air a conductivity of 3000 W/(m K), and it cannot change it.
-The air then draws heat out of the outer cells of the rock.
-In the main case the outermost 3 bins, from 19.5 to 20 km, reached only 290.0 to 291.9 K.
-With the matched air they reached 293.9 to 317.0 K, and in the 1-D model 301.7 to 358.3 K.
-With this value the shell of the main case is 5062.5 m deep, 1.34 cells deeper than in the 1-D model, against 0.84 cells with the matched air.
-The CI case and 5 of the 6 runs therefore give the air the conductivity of the porous surface rock.
-By default a configuration file gives the air a heat capacity of $3 \times 10^{6}$ J/(m³ K), less than that of solid rock; we have not measured the shell with that default.
+With the fixed surface, the conductivity and heat capacity of the air markers do not enter the heat solve.
+The run with the air conductivity of 3000 W/(m K) therefore gives the same shell depth of 4500 m and the same profiles as the run with the matched air.
+This page does not measure the shell with `thermodynamics.surface_temperature = :sticky_air`, the default of a configuration file.
+In that mode the air markers set the temperature of the nodes around the planet, so the shell depends on their heat capacity and conductivity.
 
 !!! details "Test details"
     - Reference: `solve_porous_sphere`, through `run_porous_shell_case` in `benchmarks/validation_porous_shell.jl`.
@@ -260,13 +262,13 @@ Open symbols mark runs that reached the limit of 20 Myr while part of the body w
 <!-- VALIDATION_RECORD_START: porous_shell -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `7b4a99c0`, config SHA-256 `786b2e84a798`)
+**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `bf3e2d91`, config SHA-256 `7894a73569ac`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `porous_shell_t2.5_phi0.25` | Median shell depth of the rock markers against the 1-D shell depth (Nx=65) | 65 | `5.2500e+03` | `4.5900e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
-| `porous_shell_t2.5_phi0.25` | Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65) | 65 | `5.1550e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `porous_shell_t2.5_phi0.25` | Scaled energy residual of the last thermal step (Nx=65) | 65 | `2.2782e-10` | `0.0000e+00` | `<= 1.00e-09` | dimensionless | **PASS** |
+| `porous_shell_t2.5_phi0.25` | Median shell depth of the rock markers against the 1-D shell depth (Nx=65) | 65 | `4.5000e+03` | `4.5900e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
+| `porous_shell_t2.5_phi0.25` | Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65) | 65 | `6.8223e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `porous_shell_t2.5_phi0.25` | Scaled energy residual of the last thermal step (Nx=65) | 65 | `1.1549e-14` | `0.0000e+00` | `<= 1.00e-09` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: porous_shell -->

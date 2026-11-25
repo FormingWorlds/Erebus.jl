@@ -1069,12 +1069,14 @@ function solve_hydromechanical_iterative!(
 end
 
 """
-    MatrixFreeThermalOperator{T,M}
+    MatrixFreeThermalOperator{T,M,F}
 
 Matrix-free linear operator representing the implicit 2D heat conduction stencil
 assembled by `assemble_thermal_lse!`.
 """
-struct MatrixFreeThermalOperator{T<:AbstractFloat,M<:AbstractMatrix{T}}
+struct MatrixFreeThermalOperator{
+    T<:AbstractFloat,M<:AbstractMatrix{T},F<:Union{Nothing,AbstractMatrix{Bool}}
+}
     Ny1::Int
     Nx1::Int
     dx::T
@@ -1089,6 +1091,7 @@ struct MatrixFreeThermalOperator{T<:AbstractFloat,M<:AbstractMatrix{T}}
     bcbottom::T
     bcleft::T
     bcright::T
+    fixed::F
 end
 
 """
@@ -1110,10 +1113,12 @@ coords : GridCoordinates
     Staggered grid coordinate specification.
 bctop, bcbottom, bcleft, bcright : Real
     Boundary stencil coefficients (1.0 for zero-gradient / Neumann).
+fixed : Union{Nothing,AbstractMatrix{Bool}}
+    Interior P nodes with a fixed temperature (row `T = b`), or `nothing`.
 
 Returns
 -------
-MatrixFreeThermalOperator{T,M}
+MatrixFreeThermalOperator{T,M,F}
     Matrix-free backward-Euler heat conduction operator.
 """
 function MatrixFreeThermalOperator(
@@ -1126,8 +1131,11 @@ function MatrixFreeThermalOperator(
     bcbottom::Real=1.0,
     bcleft::Real=1.0,
     bcright::Real=1.0,
+    fixed::Union{Nothing,AbstractMatrix{Bool}}=nothing,
 ) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
-    return MatrixFreeThermalOperator{T,M}(
+    (fixed === nothing || size(fixed) == (coords.Ny1, coords.Nx1)) ||
+        throw(ArgumentError("fixed must have the size of the P grid"))
+    return MatrixFreeThermalOperator{T,M,typeof(fixed)}(
         coords.Ny1,
         coords.Nx1,
         T(coords.dx),
@@ -1142,6 +1150,7 @@ function MatrixFreeThermalOperator(
         T(bcbottom),
         T(bcleft),
         T(bcright),
+        fixed,
     )
 end
 
@@ -1205,6 +1214,10 @@ function apply_thermal_A!(
 
         # Interior P-nodes
         for j in 2:Nx_val, i in 2:Ny_val
+            if op.fixed !== nothing && op.fixed[i, j]
+                y_mat[i, j] = x_mat[i, j]
+                continue
+            end
             kx_w = op.KX[i, j - 1] * inv_dx2
             kx_e = op.KX[i, j] * inv_dx2
             ky_n = op.KY[i - 1, j] * inv_dy2
@@ -1273,6 +1286,7 @@ function compute_operator_diagonal(
     d = ones(T, Ny1 * Nx1)
     d_mat = reshape(d, (Ny1, Nx1))
     @inbounds for j in 2:Nx_val, i in 2:Ny_val
+        op.fixed !== nothing && op.fixed[i, j] && continue
         d_mat[i, j] =
             op.RHOCP[i, j] * inv_dt +
             (op.KX[i, j - 1] + op.KX[i, j]) * inv_dx2 +

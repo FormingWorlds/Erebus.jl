@@ -343,6 +343,68 @@ end
         @test_throws DomainError PSV.make_porous_shell_config(; kw..., k_air=0.0)
     end
 
+    @testset "Fixed surface: the case holds the nodes outside R_p at the disk temperature" begin
+        kw = (; Nx=33, phi_init=0.25, t_form_yr=2.5e6, n_steps=3, dt_yr=1.0e4)
+        cfg = PSV.make_porous_shell_config(; kw...)
+        @test cfg.thermodynamics.surface_temperature === :fixed
+        @test PSV.make_case_config().thermodynamics.surface_temperature === :fixed
+        @test all(
+            c -> PSV.suite_case_config(c).thermodynamics.surface_temperature === :fixed,
+            PSV.SUITE_CASES,
+        )
+        # The fixed value is the disk temperature, the surface of the 1-D model
+        @test cfg.disk.enabled
+        @test isapprox(cfg.disk.t_ambient, PSV.T_SPACE; rtol=1e-14)
+        @test Erebus._validate_surface_temperature(cfg) === nothing
+        # The sticky air stays available to compare a run with it
+        sticky = PSV.make_porous_shell_config(; kw..., surface_temperature=:sticky_air)
+        @test sticky.thermodynamics.surface_temperature === :sticky_air
+        @test PSV.canonical_config_sha256(sticky) != PSV.canonical_config_sha256(cfg)
+        @test_throws ArgumentError PSV.make_porous_shell_config(;
+            kw..., surface_temperature=:radiative
+        )
+    end
+
+    @testset "Fixed surface: a free node without rock fails the run" begin
+        kw = (; Nx=17, phi_init=0.25, t_form_yr=2.5e6, n_steps=2, dt_yr=5.0e4)
+        cfg = PSV.make_porous_shell_config(; kw...)
+        sticky = PSV.make_porous_shell_config(; kw..., surface_temperature=:sticky_air)
+        stand_in(n_norock, n_norock_steps) = (;
+            accumulators=(;
+                fixed_surface_counts=(;
+                    n_fixed=120, n_norock, n_rock_out=0, n_norock_steps
+                )
+            )
+        )
+        @test PSV.check_fixed_surface_counts(stand_in(0, 0), cfg) === nothing
+        @test_throws ErrorException PSV.check_fixed_surface_counts(stand_in(3, 1), cfg)
+        # A node without rock in an earlier step fails, also when the last step had none
+        @test_throws ErrorException PSV.check_fixed_surface_counts(stand_in(0, 1), cfg)
+        # The sticky air has no fixed nodes to count
+        @test PSV.check_fixed_surface_counts(stand_in(3, 1), sticky) === nothing
+        # A real run of 2 steps: every node within R_p has rock, and the energy closes
+        clean = PSV.run_porous_shell_case(; kw..., Nr=200)
+        @test clean.fixed_surface_counts.n_norock_steps == 0
+        @test 0 < clean.fixed_surface_counts.n_fixed < 17^2
+        @test clean.energy_lse_residual <= PSV.ENERGY_RESIDUAL_LIMIT
+        # The same run with nodes without rock injected after the loop fails
+        function inject(c; output_path)
+            st = simulation_loop(c; output_path)
+            acc = st.accumulators
+            acc.fixed_surface_counts = (;
+                acc.fixed_surface_counts..., n_norock=2, n_norock_steps=1
+            )
+            return st
+        end
+        err = try
+            PSV.run_porous_shell_case(; kw..., Nr=200, run_loop=inject)
+        catch e
+            e
+        end
+        @test err isa ErrorException
+        @test occursin("without rock", err.msg)
+    end
+
     @testset "Radial bin medians" begin
         r = [0.5, 0.6, 0.7, 2.5, 2.6, 9.9, 10.5]
         v = [1.0, 5.0, 2.0, 4.0, 8.0, 7.0, 99.0]
@@ -942,9 +1004,9 @@ end
         @test abs(r65.d_shell - r65.d_shell_ref) <= max(750.0, 0.15 * r65.d_shell_ref)
         @test bench.metrics["energy_lse_residual_nx65"] <= 1.0e-9
         # The 1-D shell of the CI case is 4590 m deep (459 cells of 10 m), and the
-        # recorded Erebus shell is 5250 m deep (14 bins of 375 m from the surface)
+        # recorded Erebus shell is 4500 m deep (12 bins of 375 m from the surface)
         @test isapprox(r65.d_shell_ref, 4590.0; atol=1e-6)
-        @test isapprox(recorded["shell_depth_nx65"], 5250.0; atol=1e-9)
+        @test isapprox(recorded["shell_depth_nx65"], 4500.0; atol=1e-9)
         @test isapprox(r65.d_shell, recorded["shell_depth_nx65"]; atol=375.0)
     end
 

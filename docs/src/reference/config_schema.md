@@ -140,6 +140,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `surface_radiation` | `Bool` | `false` | - | Enable linearized Stefan-Boltzmann radiative cooling boundary condition | `true` / `false` |
 | `emissivity` | `Float64` | `0.9` | - | Surface thermal emissivity $\epsilon$ | $\in [0, 1]$ |
 | `sigma_sb` | `Float64` | `5.670374419e-8` | $\text{W}/(\text{m}^2\cdot\text{K}^4)$ | Stefan-Boltzmann radiation constant $\sigma$ | $> 0$ |
+| `surface_temperature` | `Symbol` | `:sticky_air` | - | Surface thermal boundary: `:sticky_air` lets the air markers carry the disk temperature; `:fixed` holds the P nodes outside `geometry.rplanet` at the disk temperature, with rock-only properties inside and a cut-cell face at the planet radius (needs `disk.enabled`; refused with accretion, telescoping, venting, atmosphere and `surface_radiation`) | `:sticky_air` / `:fixed` |
 
 ---
 

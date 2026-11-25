@@ -501,6 +501,84 @@ Cells with zero marker weight ($W_T \le 0$) do not receive property contribution
   $$P_t = P_f = p_{\text{surface}}$$
   The outer ghost cell layer ($i = 1$, $i = N_y + 1$, $j = 1$, $j = N_x + 1$) satisfies identity algebraic equations to maintain consistency with the staggered node indexing.
 - **Sticky Air Layer**: The domain includes a low-density buffer layer representing space above the planetesimal surface. Its viscosity ($10^{16}\text{ Pa}\cdot\text{s}$) is lower than solid rock ($10^{19}\text{ Pa}\cdot\text{s}$), which allows solid rock to deform naturally.
+- **Thermal**: The box edges have zero heat flux, and the surface temperature of the planet comes from the sticky-air markers (`thermodynamics.surface_temperature = :sticky_air`, the default) or is held at the planet radius (`:fixed`, see below).
+
+### Thermal Boundary at the Planet Surface
+
+The heat equation takes the surface temperature of the planet from one of 2 sources.
+With the default `:sticky_air`, the air markers carry the disk temperature into the nodes around the planet.
+With `thermodynamics.surface_temperature = :fixed`, the solve holds the temperature at the planet radius $R_p$ [m] itself.
+
+With `:sticky_air`, a node near the surface mixes rock and air properties.
+Air markers add heat capacity and conductivity to the nodes next to the surface.
+The surface temperature then acts somewhere in the outer cell, not at $R_p$.
+
+`:fixed` makes 3 changes to the thermal solve.
+First, every interior pressure node (P node) with a distance $r > R_p$ from the planet centre becomes a fixed node.
+Its row of the heat equation becomes $T = T_\text{disk}$, where $T_\text{disk}$ [K] is the disk temperature of the step.
+The box-edge nodes are never fixed and keep their zero-flux rows.
+
+Second, the free nodes and their faces take the properties of the rock markers alone.
+Let $W$ be the sum of the bilinear weights of all markers at a node and $W_r$ the sum over the rock markers.
+A free node takes the heat capacity $\rho c_p = \sum_r w\,(\rho c_p)_m / W$ [J/(m$^3$ K)], the temperature $T = \sum_r w\,(\rho c_p)_m T_m / \sum_r w\,(\rho c_p)_m$ and the heating $H = \sum_r w\,H_m / W$ [W/m$^3$].
+The division by $W$ and not by $W_r$ gives the node the heat that its rock markers carry, so air markers add no heat capacity.
+A face takes the weighted mean conductivity of its rock markers, or the rock conductivity of its free node when the face has no rock marker.
+
+Third, a face between a free node and a fixed node outside the planet becomes a cut-cell face.
+Let $d$ [m] be the distance from the free node to the circle $r = R_p$ along the face line, and $k$ [W/(m K)] the rock conductivity of the face.
+The face then takes the conductivity
+
+$$k_\text{face} = k \, \frac{\Delta x}{\max(d, 10^{-3} \Delta x)},$$
+
+so its heat flux is $k (T_\text{disk} - T)/d$, and the fixed value acts at $R_p$ and not at the fixed node.
+The floor $10^{-3} \Delta x$ keeps the face finite when a free node lies on the circle; the face is then at most 1000 times its rock value.
+A $y$ face uses $\Delta y$ in the same way.
+
+The spherical metric term of the heat equation takes the rock face conductivity before this scaling.
+The term is explicit: it uses the temperature at the start of the step.
+With the cut-cell value, it becomes a large heat sink next to a hot interior.
+One backward-Euler step could then take a free node below the disk temperature.
+
+A free node without rock markers within 1.5 cells of $R_p$ also becomes a fixed node.
+The first such node of a run logs a warning.
+A free node without rock deeper in the planet stops the run with an `ArgumentError`.
+The counts of fixed nodes, of free nodes without rock and of rock markers outside $R_p$ go to `state.accumulators.fixed_surface_counts` at each step.
+
+Use `:fixed` for a planet of constant radius and centre whose surface sits at the disk temperature.
+The option needs `disk.enabled = true`.
+It refuses accretion, telescoping, venting, the atmosphere and `thermodynamics.surface_radiation`, because each of these moves the surface or sets its own surface temperature.
+
+A test solves the steady heat equation of a sphere with uniform heating on the grid alone, with the spherical metric and no markers.
+It fits an effective radius $R_\text{eff}$ to the free node temperatures and compares it with $R_p$.
+With the planet centre on a node, $|R_\text{eff} - R_p|$ is $0.030\,\Delta x$, $0.016\,\Delta x$ and $0.0086\,\Delta x$ at 33, 65 and 129 nodes per side.
+The observed order is 1.87 to 2.00 for centres shifted by 0, 0.13 and 0.37 cells.
+The test requires an order of at least 1.8 and below 3.0 at each refinement, and an error below 0.05 $\Delta x$ at 129 nodes.
+Without the cut-cell face, the surface is the staircase of fixed nodes.
+At 65 nodes and a centre shift of 0.37 cells, the error of this staircase is $0.39\,\Delta x$.
+
+A second grid test takes 1 step from rock at 1000 K without heating.
+The step $\Delta t$ is 1 and 100 times $\Delta x^2/\kappa$, where $\kappa = k/(\rho c_p)$ [m$^2$/s] is the thermal diffusivity.
+At 33 and 65 nodes per side and all 3 centre shifts, no free node goes below the disk temperature.
+With the cut-cell faces in the metric term, the step of $1\,\Delta x^2/\kappa$ at 65 nodes and a shift of 0.13 cells gives 245.4 K against a disk temperature of 250 K.
+
+The option has the following limits.
+The solve does not use the staircase of fixed nodes as the surface.
+The result therefore depends on the cut-cell face.
+The order above holds for the grid solve.
+No test has measured the full step with markers against an analytic solution.
+The metric term stays explicit.
+A long enough step from a hot interior therefore still takes a free node below the disk temperature.
+A test takes 1 full step at `Nx = 17` from rock at 1000 K with a disk temperature of 290 K.
+In this test, $\kappa$ is the smallest thermal diffusivity of the free nodes.
+A step of $10\,\Delta x^2/\kappa$ keeps every free node above 290 K.
+A step of $100\,\Delta x^2/\kappa$ takes a free node below 290 K.
+In a run, the thermal iterations shorten a step whose largest temperature change exceeds `time.DTmax` [K].
+A rock marker between the last free node and $R_p$ takes a bilinear increment.
+This increment includes the increment 0 of the fixed node.
+Subgrid diffusion relaxes such a marker toward the fixed node temperature at the node centre and not at $R_p$.
+The heat of that relaxation at fixed nodes leaves the rock as boundary heat.
+The checks are in `test/test_fixed_surface_temperature.jl`.
+The validation case [Porous Shell](../validation/porous_shell.md) runs this option in the complete time loop against a 1-D model.
 
 ---
 
