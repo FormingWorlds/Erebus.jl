@@ -156,12 +156,12 @@ A pass means that a point lies between the lines of its grid.
 <!-- VALIDATION_RECORD_START: porous_shell_suite -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `b16eaac1`, config SHA-256 `ecf4b4c10ebe`)
+**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `bf3e2d91`, config SHA-256 `ecf4b4c10ebe`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `s65_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `4.8750e+03` | `4.5600e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
-| `s65_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `1.1700e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s65_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `1.1500e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `4.5000e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
 | `s129_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `2.6000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_225_025` | Median shell depth against the 1-D shell depth, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `2.2500e+03` | `2.3400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
@@ -169,7 +169,7 @@ A pass means that a point lies between the lines of its grid.
 | `s129_175_010` | Median shell depth against the 1-D shell depth, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.2500e+03` | `2.1700e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
 | `s129_175_010` | Relative L2 error of the binned peak temperature rise, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `1.5000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_25_050` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `2.4375e+03` | `2.4400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_25_050` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `4.1000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_050` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `4.0000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_25_025_k` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `4.5000e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
 | `s129_25_025_k` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `2.6000e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 
@@ -262,13 +262,13 @@ Open symbols mark runs that reached the limit of 20 Myr while part of the body w
 <!-- VALIDATION_RECORD_START: porous_shell -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `b16eaac1`, config SHA-256 `7894a73569ac`)
+**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `bf3e2d91`, config SHA-256 `7894a73569ac`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `porous_shell_t2.5_phi0.25` | Median shell depth of the rock markers against the 1-D shell depth (Nx=65) | 65 | `4.5000e+03` | `4.5900e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
-| `porous_shell_t2.5_phi0.25` | Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65) | 65 | `7.0233e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `porous_shell_t2.5_phi0.25` | Scaled energy residual of the last thermal step (Nx=65) | 65 | `1.4694e-14` | `0.0000e+00` | `<= 1.00e-09` | dimensionless | **PASS** |
+| `porous_shell_t2.5_phi0.25` | Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65) | 65 | `6.8223e-03` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `porous_shell_t2.5_phi0.25` | Scaled energy residual of the last thermal step (Nx=65) | 65 | `1.1549e-14` | `0.0000e+00` | `<= 1.00e-09` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: porous_shell -->

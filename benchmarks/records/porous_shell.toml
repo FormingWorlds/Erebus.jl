@@ -6,8 +6,8 @@
 id = "porous_shell"
 title = "Porous Shell Validation"
 page = "validation/porous_shell.md"
-src_commit = "b16eaac1a62969b1fa137f49b0d5561bccf9bf86"
-timestamp_utc = "2026-11-25T12:53:20Z"
+src_commit = "bf3e2d9133e3294d2b77bc6e42a2f657bbe13cdd"
+timestamp_utc = "2026-11-25T15:58:23Z"
 julia_version = "1.12.7"
 config_sha256 = "7894a73569ac646acc0c795a8784336cb28b4a5ffc4f0a2c55949d3159422e01"
 reference_type = "1d_fv"
@@ -52,7 +52,7 @@ id = "tmax_rel_l2_nx65"
 case = "porous_shell_t2.5_phi0.25"
 description = "Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65)"
 nx = 65
-value = 7.0232793966901923e-03
+value = 6.8222631963105610e-03
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-01
 rtol = 0.0000000000000000e+00
@@ -65,7 +65,7 @@ id = "energy_lse_residual_nx65"
 case = "porous_shell_t2.5_phi0.25"
 description = "Scaled energy residual of the last thermal step (Nx=65)"
 nx = 65
-value = 1.4693727574231353e-14
+value = 1.1549032049271359e-14
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-09
 rtol = 0.0000000000000000e+00
