@@ -62,7 +62,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
-| `dsubgridt` | `Float64` | `0.0` | - | Subgrid thermal diffusion scaling factor | $\ge 0$ |
+| `dsubgridt` | `Float64` | `1.0` | - | Subgrid thermal diffusion scaling factor | $\ge 0$ |
 | `dsubgrids` | `Float64` | `0.0` | - | Subgrid stress diffusion scaling factor | $\ge 0$ |
 | `max_plastic_iterations` | `Int` | `10000` | - | Maximum plastic yielding iterations | $\ge 1$ |
 | `max_dt_reductions` | `Int` | `5` | - | Maximum timestep reductions on plastic non-convergence | $\ge 1$ |

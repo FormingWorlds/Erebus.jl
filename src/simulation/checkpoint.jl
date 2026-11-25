@@ -563,7 +563,7 @@ function save_state(
         ratio_al,
         t_half_al,
         dsubgrids=cfg === nothing ? 0.0 : cfg.solver.dsubgrids,
-        dsubgridt=cfg === nothing ? 0.0 : cfg.solver.dsubgridt,
+        dsubgridt=cfg === nothing ? SolverConfig().dsubgridt : cfg.solver.dsubgridt,
         hr_al=cfg === nothing ? true : cfg.thermodynamics.hr_al,
         hr_fe=cfg === nothing ? false : cfg.thermodynamics.hr_fe,
         rplanet=rplanet !== nothing ? Float64(rplanet) : 50000.0,

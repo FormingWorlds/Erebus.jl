@@ -35,14 +35,33 @@ Material properties, temperature, hydration state, and porosity are carried on t
    By default (`solver.p2m_mode = :tiled`), `interpolate_markers_to_grid!` executes a two-phase 4-color tiled scatter (`bin_markers_into_tiles!` and `_scatter_tiled_p2m_tile!`). Markers are binned into coarse tiles of $T \times T$ cells (`solver.tile_size`, default $T = 4$) and processed in four independent color passes ($2 \times 2$ stride) so adjacent tiles never share staggered boundary nodes, scattering directly into the master grid arrays without thread-local grid duplication.
 
 2. **Marker Temperature Update**:
-   Each marker takes the temperature change of the four nodes around it. A cold rock marker in a cell where flow brings in hotter rock can take this cooling step after step while the node stays warm, because the next projection warms the node and not the marker. Conduction creates no local minimum. The pore fluid term can bring a node down only toward an upstream node, while the sum in item 5 stays at or below 1. So `limit_marker_temperature_increment!` keeps each rock marker at or above $\min(T_m, T_\text{nodes})$.
+   Each marker takes the temperature change of the four nodes around it. A cold rock marker in a cell where flow brings in hotter rock can take this cooling step after step while the node stays warm, because the next projection warms the node and not the marker. Conduction creates no local minimum. The pore fluid term can bring a node down only toward an upstream node, while the sum in item 5 stays at or below 1. So `limit_marker_temperature_increment!` keeps each rock marker at or above $\min(T_m, T_\text{nodes}^{\text{end}})$, the lower of its own temperature and the temperatures of its nodes at the step end.
 
    The rejected cooling goes to the other rock markers at the same nodes, weighted by their heat capacity and, under the spherical metric, their out-of-plane length, so the heat of the step does not change. Where no other rock marker can take it, the heat is not delivered.
 
-   Heating has no such bound, because a heat source can raise a marker above its nodes. Sticky-air markers take the plain increment, because the next step resets them to the ambient temperature. When subgrid diffusion is on, the bound applies only to the part of the grid increment from the solve, so the relaxation and its counterpart in the grid increment can still exchange heat between markers.
+   Heating has no such bound, because a heat source can raise a marker above its nodes.
+   Sticky-air markers take the plain increment, because the next step resets them to the ambient temperature.
+   Subgrid diffusion (from step 2, with $\Delta t > 0$) adds its own part to the grid increment, and the limit then acts in two stages.
+   First, the subgrid part stops at the floor $T_\text{floor} = \min(T_m^{\text{start}}, T_\text{nodes}^{\text{start}})$, and its rejected cooling goes to the other rock markers in the same way.
+   Here $T_m^{\text{start}}$ is the marker temperature before subgrid diffusion, and $T_\text{nodes}^{\text{start}}$ are its node temperatures at the step start.
+   Second, the increment from the solve takes the bound above, from the marker temperature after the first stage.
+   The relaxation can still move a hot marker down to its nodes.
+   Where this floor acts in a cell whose rock markers are all at their floor, the rejected cooling has no receiver and is not delivered, as above.
 
 3. **Subgrid Diffusion**:
-   Subgrid diffusion damping for temperature and stress is available as a configurable option (`dsubgridt`, `dsubgrids`), set to zero (disabled) by default.
+   Subgrid diffusion relaxes marker temperatures (`dsubgridt`, default 1) and marker stresses (`dsubgrids`, default 0, off) toward the grid.
+   From the second step on, a marker takes only the grid increment $\Delta T$, so the difference between the marker temperature and the grid temperature at its position adds up over the steps.
+   Where sticky air shares a node with rock, or where the conductivity or heat capacity changes sharply, this difference can grow to hundreds of kelvin without subgrid diffusion.
+   When `dsubgridt > 0`, `apply_subgrid_temperature_diffusion!` corrects each rock marker by
+   $$\delta T_m = \left(T_m - T_{\text{grid}}(x_m, y_m)\right) \left[\exp\left(-d_{\text{subgridt}} \frac{k_m \Delta t}{(\rho c_p)_m} \, 2\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right)\right) - 1\right]$$
+   where $k_m$ and $(\rho c_p)_m$ are the marker conductivity and volumetric heat capacity of the step (with the latent heat term when melting is on), and $T_{\text{grid}}$ is the grid temperature of the step start at the marker.
+   The heat-capacity-weighted node mean of the corrections is subtracted from the grid increment.
+   So without the spherical metric the relaxation and the cold floor do not change the sum of $(\rho c_p)_m \Delta T_m$ over rock markers, unless the floor rejects heat that it does not hand on to another marker within its 4 passes (`max_passes`).
+   Sticky-air markers take no part, because the next step resets them to the ambient temperature.
+   Limits:
+   the relaxation time is the diffusion time of one cell, so for low-conductivity rock on a coarse grid it removes only a small part of the difference at each step.
+   In the porous shell case (dry porosity, $R_p$ = 20 km, 20 steps of 50 kyr) the largest difference is 32 K at Nx 65 and 84 K at Nx 33 (119 K and 146 K without subgrid diffusion).
+   The weights are the 2-D bilinear weights, also under the spherical metric, so the rock heat weighted by the out-of-plane length $2r$ is not kept exactly; the error grows as $\Delta x / r$ toward the centre.
    When `dsubgrids > 0`, `apply_subgrid_stress_diffusion!` relaxes marker deviatoric stresses ($\sigma_{xx,m}, \sigma_{xy,m}$) toward interpolated staggered-grid stresses over the local Maxwell viscoelastic relaxation timescale $\tau_{\text{Maxwell},m} = \eta_{vp,m} / G_m$:
    $$\Delta \sigma_{\text{subgrid},m} = \left(\sigma_{\text{grid}}(x_m, y_m) - \sigma_m\right) \left[1 - \exp\left(-d_{\text{subgrids}} \frac{\Delta t \, G_m}{\eta_{vp,m}}\right)\right]$$
    where $\eta_{vp,m}$ is the marker viscoelastic viscosity (`etavpm`, falling back to the phase viscosity `etasolidm[tm]`) and $1 / G_m$ is the inverse marker shear modulus (`inv_gggtotalm[m]`, initialized from `gggsolidm[tm]`).

@@ -92,7 +92,7 @@ const REPLAY_ATOL_BOUNDS = Dict{String,Float64}(
 )
 
 """
-    make_spherical_conduction_config(; Nx=NX_COARSE, n_steps=N_STEPS_TRANSIENT, start_time=START_TIME_YR, dt_yr=DT_YR, spherical_metric=true, reg_cells=REG_CELLS_DEFAULT, disk_enabled=true, k_rock=K_COND, k_air=K_COND, rhocp_air=RHOCP_AIR, dsubgridt=0.0, f_al=F_AL, seed=SEED_DEFAULT) -> SimulationConfig
+    make_spherical_conduction_config(; Nx=NX_COARSE, n_steps=N_STEPS_TRANSIENT, start_time=START_TIME_YR, dt_yr=DT_YR, spherical_metric=true, reg_cells=REG_CELLS_DEFAULT, disk_enabled=true, k_rock=K_COND, k_air=K_COND, rhocp_air=RHOCP_AIR, dsubgridt=SolverConfig().dsubgridt, f_al=F_AL, seed=SEED_DEFAULT) -> SimulationConfig
 
 Construct a pure-conduction spherical planetesimal configuration with all non-conductive physics disabled.
 
@@ -119,7 +119,7 @@ k_air : Float64, optional
 rhocp_air : Float64, optional
     Sticky-air volumetric heat capacity in J/(m^3*K) (default `3.0e10`).
 dsubgridt : Float64, optional
-    Subgrid thermal diffusion coefficient (default `0.0`).
+    Subgrid thermal diffusion coefficient (default `SolverConfig().dsubgridt`, 1).
 f_al : Float64, optional
     Chondritic Al abundance in atoms/kg (default `1.9e23`).
 seed : Int, optional
@@ -146,7 +146,7 @@ function make_spherical_conduction_config(;
     k_rock::Float64=K_COND,
     k_air::Float64=K_COND,
     rhocp_air::Float64=RHOCP_AIR,
-    dsubgridt::Float64=0.0,
+    dsubgridt::Float64=SolverConfig().dsubgridt,
     f_al::Float64=F_AL,
     seed::Int=SEED_DEFAULT,
 )::SimulationConfig
@@ -770,7 +770,7 @@ function run_steady_spherical_conduction(
 end
 
 """
-    run_transient_spherical_conduction(Nx::Int; n_steps=N_STEPS_TRANSIENT, dt_yr=DT_YR, spherical_metric=true, reg_cells=REG_CELLS_DEFAULT, k_rock=K_COND, k_air=K_COND, disk_enabled=true, rhocp_air=RHOCP_AIR, dsubgridt=0.0, f_al=F_AL, seed=SEED_DEFAULT) -> NamedTuple
+    run_transient_spherical_conduction(Nx::Int; n_steps=N_STEPS_TRANSIENT, dt_yr=DT_YR, spherical_metric=true, reg_cells=REG_CELLS_DEFAULT, k_rock=K_COND, k_air=K_COND, disk_enabled=true, rhocp_air=RHOCP_AIR, dsubgridt=SolverConfig().dsubgridt, f_al=F_AL, seed=SEED_DEFAULT) -> NamedTuple
 
 Run the transient 2D spherical radiogenic conduction simulation through `simulation_loop` and compare against `analytical_T_BE`.
 
@@ -795,7 +795,7 @@ disk_enabled : Bool, optional
 rhocp_air : Float64, optional
     Sticky-air volumetric heat capacity in J/(m^3*K) (default `RHOCP_AIR`).
 dsubgridt : Float64, optional
-    Subgrid thermal diffusion coefficient (default `0.0`).
+    Subgrid thermal diffusion coefficient (default `SolverConfig().dsubgridt`, 1).
 f_al : Float64, optional
     Simulated chondritic Al abundance in atoms/kg (default `F_AL`).
 seed : Int, optional
@@ -823,7 +823,7 @@ function run_transient_spherical_conduction(
     k_air::Float64=K_COND,
     disk_enabled::Bool=true,
     rhocp_air::Float64=RHOCP_AIR,
-    dsubgridt::Float64=0.0,
+    dsubgridt::Float64=SolverConfig().dsubgridt,
     f_al::Float64=F_AL,
     seed::Int=SEED_DEFAULT,
 )

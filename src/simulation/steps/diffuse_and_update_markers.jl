@@ -173,6 +173,51 @@ function diffuse_and_update_markers!(
         DS33=s33_kw.DS33,
     )
 
+    _relax_and_limit_marker_temperatures!(state, coords, cfg, TKSUM, RHOCPSUM)
+
+    return nothing
+end
+
+"""
+Relax rock marker temperatures toward the grid (subgrid diffusion) and limit the cooling of
+the grid increment. The cold floor of a marker is the lower of its temperature before the
+relaxation and the start temperatures `tk1` of its nodes.
+
+$(SIGNATURES)
+
+# Arguments
+
+    - state: simulation state; marker temperatures and the grid increment `DT` change;
+      `state.grids.DT0` must hold the solve increment
+    - coords: grid coordinates
+    - cfg: configuration (`solver.dsubgridt`, `geometry.spherical_metric`)
+    - TKSUM, RHOCPSUM: scratch arrays at P nodes
+
+# Returns
+
+    - nothing
+
+# Throws
+
+    - the errors of `apply_subgrid_temperature_diffusion!`,
+      `limit_marker_temperature_increment!` and `limit_relaxed_marker_temperatures!`
+
+# Notes
+
+The relaxation runs when `solver.dsubgridt > 0` and the time step is positive. From step 2
+the limit acts: in two stages with the cold floor when the relaxation runs
+(`limit_relaxed_marker_temperatures!`), else in one stage without it. At step 1 the marker
+update sets the markers to the grid temperature, which replaces the relaxed marker
+temperatures; the relaxation then leaves only its change of `DT`.
+"""
+function _relax_and_limit_marker_temperatures!(
+    state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig, TKSUM, RHOCPSUM
+)
+    g = state.grids
+    core = state.markers.core
+    marknum = length(state.markers)
+    subgrid_on = cfg.solver.dsubgridt > 0.0 && state.dt > 0.0 && state.timestep > 1
+    tkm_pre = subgrid_on ? core.tkm[1:marknum] : nothing
     apply_subgrid_temperature_diffusion!(
         core.xm,
         core.ym,
@@ -189,10 +234,31 @@ function diffuse_and_update_markers!(
         coords=coords,
         dsubgridt=cfg.solver.dsubgridt,
         phi_dry=dry_porosity(state.markers),
+        rhocptotalm=core.rhocptotalm,
+        ktotalm=core.ktotalm,
     )
-
     # The first step sets markers from the grid, without an increment.
-    if state.timestep > 1
+    state.timestep > 1 || return nothing
+    w3d = cfg.geometry.spherical_metric ? core.w3d_m : nothing
+    if subgrid_on
+        limit_relaxed_marker_temperatures!(
+            core.xm,
+            core.ym,
+            core.tm,
+            core.tkm,
+            core.rhocptotalm,
+            g.DT,
+            g.DT0,
+            g.tk1,
+            g.tk2,
+            TKSUM,
+            RHOCPSUM,
+            marknum;
+            coords=coords,
+            tkm_floor=tkm_pre,
+            w3d=w3d,
+        )
+    else
         limit_marker_temperature_increment!(
             core.xm,
             core.ym,
@@ -205,10 +271,8 @@ function diffuse_and_update_markers!(
             RHOCPSUM,
             marknum;
             coords=coords,
-            DT_conduction=cfg.solver.dsubgridt > 0.0 ? g.DT0 : g.DT,
-            w3d=cfg.geometry.spherical_metric ? core.w3d_m : nothing,
+            w3d=w3d,
         )
     end
-
     return nothing
 end

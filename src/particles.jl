@@ -4616,25 +4616,45 @@ $(SIGNATURES)
 
 # Details
 
-    - xm: marker x-coordinates 
-	- ym: marker y-coordinates
-	- tm: marker type
-	- tkm: marker temperature
+A rock marker takes only the grid increment from step 2 on, so the difference between
+its temperature and the grid temperature at its position adds up over the steps. This
+step relaxes that difference by the factor
+`exp(-dsubgridt * k * dt / rhocp * 2 (1/dx^2 + 1/dy^2)) - 1` and subtracts the
+heat-capacity-weighted node mean of the corrections from `DT`, so the rock heat of the
+step is unchanged. Sticky-air markers take no part: the next step resets them to the
+ambient temperature, so heat given to them would be lost. The weights are the 2-D
+bilinear weights, also under the spherical metric.
+
+    - xm: marker x-coordinates
+    - ym: marker y-coordinates
+    - tm: marker type
+    - tkm: marker temperature
     - phim: marker porosity
     - tk1: current temperature at P nodes
-	- DT: temperature change at P nodes
-	- TKSUM: interpolation of TK at P nodes 
-	- RHOCPSUM: interpolation of RHOCP at P nodes
-    - dt: computational time step
-	- marknum: total number of markers in use
+    - DT: temperature change at P nodes
+    - TKSUM: interpolation of TK at P nodes
+    - RHOCPSUM: interpolation of RHOCP at P nodes
+    - dt: computational time step [s]
+    - marknum: total number of markers in use
     - mode: marker property computation mode
         - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
              Travis and Schubert, 2005)
         - 2: constant parameter rhocpfluidm
+    - dsubgridt: relaxation factor, 0 switches the step off
+    - phi_dry: dry porosity of the markers (Henke et al. 2012), or `nothing`
+    - rhocptotalm, ktotalm: marker volumetric heat capacity and conductivity of the step;
+      an entry that is not positive, or `nothing`, uses the constitutive value
 
 # Returns
 
     - nothing
+
+# Throws
+
+    - `DomainError`: if `dsubgridt` or `dt` is negative or not finite
+    - `ArgumentError`: if `dsubgridt` and `dt` are positive and `tk1`, `DT`, `TKSUM` or
+      `RHOCPSUM` does not have the size of the P grid
+    - `DomainError`: if the position of a rock marker is not finite
 """
 function apply_subgrid_temperature_diffusion!(
     xm,
@@ -4650,20 +4670,31 @@ function apply_subgrid_temperature_diffusion!(
     marknum,
     mode;
     coords::GridCoordinates=default_grid_coordinates(),
-    dsubgridt::Real=dsubgridt,
+    dsubgridt::Real=1.0,
     phi_dry=nothing,
+    rhocptotalm=nothing,
+    ktotalm=nothing,
 )
-    # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
-    if dsubgridt == 0.0
+    (isfinite(dsubgridt) && dsubgridt >= 0.0) ||
+        throw(DomainError(dsubgridt, "dsubgridt must be finite and non-negative"))
+    (isfinite(dt) && dt >= 0.0) ||
+        throw(DomainError(dt, "dt must be finite and non-negative"))
+    # nothing relaxes in a zero step (and 0 / 0 at zero heat capacity is avoided)
+    if dsubgridt == 0.0 || dt == 0.0
         return nothing
     end
-    Ny1, Nx1 = size(RHOCPSUM)
+    p_size = (coords.Ny1, coords.Nx1)
+    all(a -> size(a) == p_size, (tk1, DT, TKSUM, RHOCPSUM)) ||
+        throw(ArgumentError("tk1, DT, TKSUM and RHOCPSUM must have the size of the P grid"))
+    Ny1, Nx1 = p_size
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     # reset interpolation arrays
     TKSUM .= 0.0
     RHOCPSUM .= 0.0
     # iterate over markers
     for m in 1:1:marknum
+        # sticky air is reset each step, so it neither relaxes nor takes heat
+        @inbounds tm[m] < 3 || continue
         @inbounds i, j, weights = fix_weights(
             xm[m],
             ym[m],
@@ -4679,32 +4710,31 @@ function apply_subgrid_temperature_diffusion!(
         # compute marker-node temperature difference
         @inbounds δtkm = tkm[m] - dot4(grid_vector(i, j, tk1), weights)
         # compute marker properties
-        @inbounds if tm[m] < 3 && phi_dry !== nothing
-            # dry porous rock (Henke et al. 2012)
-            rhocptotalm = rhocpsolidm[tm[m]] * (1.0 - phi_dry[m])
-            ktotalm = k_porous(compute_ksolidm(tkm[m], mode), phi_dry[m])
-        elseif tm[m] < 3
-            # rocks
-            @inbounds rhocptotalm = total(
-                rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m]
-            )
-            @inbounds ktotalm = ktotal(
-                compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m]
-            )
+        # the marker values of the step (latent heat, k_eff) when given, else constitutive
+        @inbounds rhocp_m = if rhocptotalm !== nothing && rhocptotalm[m] > 0.0
+            rhocptotalm[m]
+        elseif phi_dry !== nothing
+            rhocpsolidm[tm[m]] * (1.0 - phi_dry[m])
         else
-            # sticky air
-            @inbounds rhocptotalm = rhocpsolidm[tm[m]]
-            @inbounds ktotalm = ksolidm[tm[m]]
+            total(rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
+        end
+        @inbounds k_m = if ktotalm !== nothing && ktotalm[m] > 0.0
+            ktotalm[m]
+        elseif phi_dry !== nothing
+            k_porous(compute_ksolidm(tkm[m], mode), phi_dry[m])
+        else
+            ktotal(compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m])
         end
         # time-relax δtkm difference
         δtkm *= (
-            exp(-dsubgridt*ktotalm*dt/rhocptotalm*(2.0*(inv(dx_val^2)+inv(dy_val^2)))) - 1.0
+            exp(-dsubgridt * k_m * dt / rhocp_m * (2.0 * (inv(dx_val^2) + inv(dy_val^2)))) -
+            1.0
         )
         # correct marker temperature
         @inbounds tkm[m] += δtkm
         # update subgrid diffusion on P nodes
-        interpolate_add_to_grid!(i, j, weights, δtkm*rhocptotalm, TKSUM)
-        interpolate_add_to_grid!(i, j, weights, rhocptotalm, RHOCPSUM)
+        interpolate_add_to_grid!(i, j, weights, δtkm * rhocp_m, TKSUM)
+        interpolate_add_to_grid!(i, j, weights, rhocp_m, RHOCPSUM)
     end
     # compute DTsubgrid=TKSUM/RHOCPSUM and update temperature field at P nodes
     for j in 1:1:Nx1, i in 1:1:Ny1
@@ -4742,10 +4772,16 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
     - DEFICIT: scratch array at P nodes for the rejected heat
     - CAPACITY: scratch array at P nodes for the heat capacity of the receiving markers
     - marknum: total number of markers in use
-    - DT_conduction: the part of `DT` from the solve; the rest of `DT` is the counterpart of
-      subgrid diffusion, which the bound does not limit
+    - coords: grid coordinates
+    - max_passes: number of passes that hand rejected heat on to receiving markers
+    - DT_conduction: the part of `DT` from the solve; the bound starts from the marker
+      temperature plus the rest of `DT`, the part of subgrid diffusion
     - w3d: marker out-of-plane length under the spherical metric [m], or `nothing` for
       equal weights
+    - tkm_floor, tk_floor: marker temperatures before subgrid diffusion and the node
+      temperatures of the step start; when given, the bound is the floor
+      `min(tkm_floor[m], min(tk_floor nodes))` alone, and `DT` must hold only the part of
+      subgrid diffusion (see `limit_relaxed_marker_temperatures!`)
 
 # Returns
 
@@ -4756,7 +4792,9 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
 # Throws
 
     - `DomainError`: if `marknum` is negative or `max_passes` is below 1
-    - `ArgumentError`: if an array is too short or a grid array has the wrong size
+    - `ArgumentError`: if an array is too short or a grid array has the wrong size, if only
+      one of `tkm_floor` and `tk_floor` is given, or if the floor is given with a
+      `DT_conduction` other than `DT`
 """
 function limit_marker_temperature_increment!(
     xm,
@@ -4773,8 +4811,18 @@ function limit_marker_temperature_increment!(
     max_passes::Int=4,
     DT_conduction=DT,
     w3d=nothing,
+    tkm_floor=nothing,
+    tk_floor=nothing,
 )
     marknum >= 0 || throw(DomainError(marknum, "marknum must be non-negative"))
+    (tkm_floor === nothing) == (tk_floor === nothing) ||
+        throw(ArgumentError("tkm_floor and tk_floor must be given together"))
+    (tkm_floor === nothing || length(tkm_floor) >= marknum) ||
+        throw(ArgumentError("tkm_floor must hold at least marknum entries"))
+    (tk_floor === nothing || size(tk_floor) == size(DT)) ||
+        throw(ArgumentError("tk_floor must have the size of the P grid"))
+    (tkm_floor === nothing || DT_conduction === DT) ||
+        throw(ArgumentError("the floor bound takes no DT_conduction"))
     max_passes >= 1 || throw(DomainError(max_passes, "max_passes must be at least 1"))
     marker_arrays = (xm, ym, tm, tkm, rhocptotalm)
     all(a -> length(a) >= marknum, marker_arrays) ||
@@ -4808,10 +4856,15 @@ function limit_marker_temperature_increment!(
     @inline function marker_range(m, i, j, weights)
         increment = dot4(grid_vector(i, j, DT), weights)
         T_new = tkm[m] + correction[m] + increment
-        T_base = tkm[m]
-        if DT_conduction !== DT
-            T_base += increment - dot4(grid_vector(i, j, DT_conduction), weights)
+        if tkm_floor !== nothing
+            return T_new, min(tkm_floor[m], minimum(grid_vector(i, j, tk_floor)))
         end
+        dTc = if DT_conduction === DT
+            increment
+        else
+            dot4(grid_vector(i, j, DT_conduction), weights)
+        end
+        T_base = tkm[m] + (increment - dTc)
         return T_new, min(T_base, minimum(grid_vector(i, j, tk2)))
     end
 
@@ -4870,6 +4923,104 @@ function limit_marker_temperature_increment!(
     end
     return (; n_limited, heat_rejected, heat_lost)
 end # function limit_marker_temperature_increment!
+
+"""
+Limit the increment of rock markers after subgrid diffusion in two stages.
+
+$(SIGNATURES)
+
+# Details
+
+The subgrid part `DT - DT_conduction` of the grid increment first stops at the cold floor
+`min(tkm_floor[m], min(tk1 nodes))`; the rejected cooling goes to the other rock markers at
+the same nodes. The solve part `DT_conduction` then takes the usual cooling bound, from the
+temperature after the first stage. Each stage keeps the heat where a receiving marker exists.
+
+    - xm, ym: marker coordinates [m]
+    - tm: marker type
+    - tkm: marker temperature after subgrid diffusion [K]; the corrections of both stages
+      are written into it
+    - rhocptotalm: marker volumetric heat capacity [J/(m^3 K)]
+    - DT: temperature change at P nodes, the solve part plus the subgrid part [K]
+    - DT_conduction: the solve part of `DT` [K]
+    - tk1, tk2: start and next temperatures at P nodes [K]
+    - DEFICIT, CAPACITY: scratch arrays at P nodes
+    - marknum: total number of markers in use
+    - coords: grid coordinates
+    - tkm_floor: marker temperatures before subgrid diffusion [K]
+    - w3d: marker out-of-plane length under the spherical metric [m], or `nothing`
+
+# Returns
+
+    - named tuple: `n_limited`, the number of limits (a marker limited in both stages
+      counts twice), and `heat_rejected` and `heat_lost` [J/m^3, times `w3d` when one is
+      given], summed over both stages
+
+# Throws
+
+    - `ArgumentError`: if `DT_conduction` or `tk1` does not have the size of `DT`, if an
+      array is too short, or if a grid array does not have the size of the P grid
+    - `DomainError`: if `marknum` is negative or the position of a rock marker is not finite
+    - `MethodError`: if `tk1` is not a matrix
+    - `TypeError`: if `tkm_floor` is not a vector
+"""
+function limit_relaxed_marker_temperatures!(
+    xm,
+    ym,
+    tm,
+    tkm,
+    rhocptotalm,
+    DT,
+    DT_conduction,
+    tk1::AbstractMatrix,
+    tk2,
+    DEFICIT,
+    CAPACITY,
+    marknum;
+    coords::GridCoordinates=default_grid_coordinates(),
+    tkm_floor::AbstractVector,
+    w3d=nothing,
+)
+    size(DT) == size(DT_conduction) ||
+        throw(ArgumentError("DT_conduction must have the size of DT"))
+    size(tk1) == size(DT) || throw(ArgumentError("tk1 must have the size of DT"))
+    floor_stats = limit_marker_temperature_increment!(
+        xm,
+        ym,
+        tm,
+        tkm,
+        rhocptotalm,
+        DT .- DT_conduction,
+        tk2,
+        DEFICIT,
+        CAPACITY,
+        marknum;
+        coords=coords,
+        w3d=w3d,
+        tkm_floor=tkm_floor,
+        tk_floor=tk1,
+    )
+    limit_stats = limit_marker_temperature_increment!(
+        xm,
+        ym,
+        tm,
+        tkm,
+        rhocptotalm,
+        DT,
+        tk2,
+        DEFICIT,
+        CAPACITY,
+        marknum;
+        coords=coords,
+        DT_conduction=DT_conduction,
+        w3d=w3d,
+    )
+    return (;
+        n_limited=floor_stats.n_limited + limit_stats.n_limited,
+        heat_rejected=floor_stats.heat_rejected + limit_stats.heat_rejected,
+        heat_lost=floor_stats.heat_lost + limit_stats.heat_lost,
+    )
+end
 
 """
 Update marker temperature based on P grid temperature changes.

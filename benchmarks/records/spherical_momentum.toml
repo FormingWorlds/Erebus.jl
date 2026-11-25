@@ -6,10 +6,10 @@
 id = "spherical_momentum"
 title = "Spherical Momentum Validation"
 page = "validation/spherical_momentum.md"
-src_commit = "b80632a72404a380a8715d56c63f1be34c945a43"
-timestamp_utc = "2026-11-20T16:45:18Z"
+src_commit = "7b4a99c0294f151dbb7b960ee566fdc61c0d817d"
+timestamp_utc = "2026-11-25T02:23:52Z"
 julia_version = "1.12.7"
-config_sha256 = "2b1b6a1006acb69f384fd2c274c002efe69a24389a038108bb5ab6b7283fe0a2"
+config_sha256 = "0e373ee6716e59608a7376da10eed8d9026523e0dc0989a0a7edcaff10958c04"
 reference_type = "analytical"
 reference_citation = "Closed forms of azimuthal shear u = r Omega(r) e_theta for the momentum equation with and without the spherical metric terms, a manufactured flow r u = curl(r^3 X Y (1 - rho^2)^6 e_z) for the documented spherical-slice momentum equation, and a radial compaction flow u = U0 R grad (1 - rho^2)^5 with q = -u for the 3-D sphere equations of a compressible matrix"
 

@@ -6,10 +6,10 @@
 id = "porous_shell"
 title = "Porous Shell Validation"
 page = "validation/porous_shell.md"
-src_commit = "f0cec3dd4deff7fa0e4f403d530ddff67fb308c5"
-timestamp_utc = "2026-11-24T00:37:40Z"
+src_commit = "7b4a99c0294f151dbb7b960ee566fdc61c0d817d"
+timestamp_utc = "2026-11-25T02:20:05Z"
 julia_version = "1.12.7"
-config_sha256 = "fcf41aa4e790f6adaa9a49d838b092e7a79f85268411767817332894652f6f87"
+config_sha256 = "786b2e84a79885698b945feb27add0794120417acb79fbbf32a3e79d9b7333f0"
 reference_type = "1d_fv"
 reference_citation = "One-dimensional spherical finite-volume solution with the same time step: backward Euler conduction with the porous conductivity of Lichtenberg et al. (2016a, Eq. 12), 26Al heating, cold pressing and hot sintering of Henke et al. (2012)"
 
@@ -52,7 +52,7 @@ id = "tmax_rel_l2_nx65"
 case = "porous_shell_t2.5_phi0.25"
 description = "Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65)"
 nx = 65
-value = 4.9911625772436775e-02
+value = 5.1550458377306929e-02
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-01
 rtol = 0.0000000000000000e+00
@@ -65,7 +65,7 @@ id = "energy_lse_residual_nx65"
 case = "porous_shell_t2.5_phi0.25"
 description = "Scaled energy residual of the last thermal step (Nx=65)"
 nx = 65
-value = 2.2975404709729758e-10
+value = 2.2782058160633690e-10
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-09
 rtol = 0.0000000000000000e+00

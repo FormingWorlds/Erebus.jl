@@ -6,10 +6,10 @@
 id = "spherical_pressure_diffusion"
 title = "Spherical Pressure Diffusion Validation"
 page = "validation/spherical_pressure_diffusion.md"
-src_commit = "b80632a72404a380a8715d56c63f1be34c945a43"
-timestamp_utc = "2026-11-18T23:05:55Z"
+src_commit = "7b4a99c0294f151dbb7b960ee566fdc61c0d817d"
+timestamp_utc = "2026-11-25T02:24:32Z"
 julia_version = "1.12.7"
-config_sha256 = "23a36fb69593998b74dea7e0b91bdb34db8ee85be35e7f9c17b00c3b2a26f0b6"
+config_sha256 = "07e42956b9e3240b3dad0bdaee0b6c719fb163f19e391334066f17a790b34c7e"
 reference_type = "analytical"
 reference_citation = "Backward-Euler Fourier series (sphere, d = 3) and Fourier-Bessel series (disk, d = 2) of pore pressure diffusion with a fixed surface pressure, rigid-matrix storage coefficient S = phi bf + (1 - phi) bphi bs / (bphi + bs)"
 

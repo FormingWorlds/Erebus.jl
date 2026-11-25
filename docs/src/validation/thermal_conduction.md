@@ -174,7 +174,7 @@ A pass means that the points approach zero as the grid gets finer.
 At `Nx = 65` the centre is 16 K below the reference, about 3 % of the rise.
 This difference is mostly spatial.
 It is 50 K at `Nx = 33`.
-The L2 error at `Nx = 65` is 0.42 times the error at `Nx = 33`.
+The L2 error at `Nx = 65` is 0.43 times the error at `Nx = 33`.
 At `Nx = 65`, a 5 times smaller time step moves the centre difference to 24 K below the reference.
 So a smaller step alone does not remove it.
 Near the edge, nodes inside the radius can stay at the surface temperature, because they lie on the staircase.
@@ -213,7 +213,7 @@ The markers start with a random jitter, set by `solver.seed`.
 The random stream can change between Julia versions.
 The bands must stay wider than this jitter, or a harmless change would fail them.
 We therefore measured the spread over 8 other seeds.
-The largest shift is 0.76 K on the centre rise and 0.0019 on the L2 error.
+The largest shift is 0.74 K on the centre rise and 0.0023 on the L2 error.
 
 ```@raw html
 <div class="validation-fig-light">
@@ -265,7 +265,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_conduction -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_conduction.toml` (Source commit `79b0b41c`, config SHA-256 `d87bff19da90`)
+**Validation record**: `benchmarks/records/spherical_conduction.toml` (Source commit `7b4a99c0`, config SHA-256 `3924f354de87`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -275,9 +275,9 @@ The second command needs NumPy and Matplotlib.
 | `steady` | Steady radial profile L2 relative error (r <= R, Nx=65) | 65 | `6.4513e-02` | `0.0000e+00` | `<= 8.00e-02` | dimensionless | **PASS** |
 | `steady` | Steady discrete energy conservation residual (Nx=65) | 65 | `3.7796e-14` | `0.0000e+00` | `<= 1.00e-11` | dimensionless | **PASS** |
 | `transient` | Step-averaged analytical BE series vs 1D spherical FV relative difference | 1D | `3.9330e-08` | `0.0000e+00` | `<= 1.00e-05` | dimensionless | **PASS** |
-| `transient` | Transient centre temperature rise dT(r_min) vs step-averaged BE reference (Nx=65) | 65 | `4.9084e+02` | `5.0708e+02` | `atol=2.50e+01, rtol=5.00e-02` | K | **PASS** |
-| `transient` | Transient radial profile L2 relative error vs step-averaged BE reference (r <= R, Nx=65) | 65 | `8.2867e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `transient` | Transient radial profile L2 convergence ratio L2(Nx=65) / L2(Nx=33) | 65 | `4.2047e-01` | `0.0000e+00` | `<= 6.00e-01` | dimensionless | **PASS** |
+| `transient` | Transient centre temperature rise dT(r_min) vs step-averaged BE reference (Nx=65) | 65 | `4.9090e+02` | `5.0708e+02` | `atol=2.50e+01, rtol=5.00e-02` | K | **PASS** |
+| `transient` | Transient radial profile L2 relative error vs step-averaged BE reference (r <= R, Nx=65) | 65 | `8.3358e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `transient` | Transient radial profile L2 convergence ratio L2(Nx=65) / L2(Nx=33) | 65 | `4.2528e-01` | `0.0000e+00` | `<= 6.00e-01` | dimensionless | **PASS** |
 | `transient` | Maximum sticky-air temperature in r >= R + dx (Nx=65) | 65 | `1.7000e+02` | `1.7000e+02` | `atol=1.00e-02, rtol=0.00e+00` | K | **PASS** |
 
 ```@raw html
