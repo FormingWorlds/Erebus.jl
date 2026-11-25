@@ -1,4 +1,5 @@
 using Erebus
+using JLD2
 using LinearAlgebra
 using Random
 using SparseArrays
@@ -328,6 +329,9 @@ end
     end
 
     @testset "S1 steady sphere: R_eff converges at second order" begin
+        # |R_eff - R_p| / dx of the numerics page at 33, 65, 129 nodes, centre on a node;
+        # tolerance half a unit in the last digit given
+        errs_page = ((0.030, 0.0005), (0.016, 0.0005), (0.0086, 0.00005))
         for shift in (0.0, 0.13, 0.37)
             errs = Float64[]
             dxs = Float64[]
@@ -343,12 +347,17 @@ end
             @test errs[3] < 0.05 * dxs[3]
             # second order at each refinement, not first (1) or a super-convergent fluke
             @test 1.8 <= minimum(orders) <= maximum(orders) < 3.0
+            iszero(shift) || continue
+            for (k, (e_ref, tol)) in enumerate(errs_page)
+                @test isapprox(errs[k] / dxs[k], e_ref; atol=tol)
+            end
         end
         # Without the cut-cell face the error is of the order of the staircase offset
         e_stair, dx65 = fs_steady_error(65, 0.37; cut_cell=false)
         e_cut, _ = fs_steady_error(65, 0.37)
         println("S1 staircase N=65 shift=0.37 |R_eff-R_p|=$(e_stair / dx65) dx")
         @test e_stair > 5 * e_cut
+        @test isapprox(e_stair / dx65, 0.39; atol=0.005)
     end
 
     @testset "S2 fixed nodes hold and free rows equal the main assembly" begin
@@ -504,6 +513,8 @@ end
             "S9 grid N=65 shift=0.13 dt=1 dx^2/kappa, cut faces in the metric: $tmin_cut K"
         )
         @test tmin_cut < FS_TS - 1.0
+        # Value of the numerics page, to half a unit in its last digit
+        @test isapprox(tmin_cut, 245.4; atol=0.05)
     end
 
     @testset "S5 energy bookkeeping with the boundary flux" begin
@@ -1116,7 +1127,39 @@ end
         println("S9 solve Nx=17: min free tk2 = $tmin K, T_fixed = $T_fixed K")
         @test isapprox(g.Q_metric, Q_uncut; rtol=1e-12)
         @test maximum(abs, Q_cut .- Q_uncut) > 0.5 * maximum(abs, Q_uncut)
+        # The numerics page: above 290 K at 10 dx^2 / kappa, not at 100 dx^2 / kappa
+        @test isapprox(T_fixed, 290.0; atol=1e-9)
         @test tmin >= T_fixed - 1e-9
         @test tmin < 1000.0
+        # The solve reads tk1, KX and KY and does not change them, so it can run again
+        state.dt = 100.0 * coords.dx^2 / kappa
+        Erebus.solve_thermal_energy!(state, coords, cfg, ws; titer=1)
+        tmin_100 = minimum(g.tk2[interior])
+        println("S9 solve Nx=17, 100 dx^2/kappa: min free tk2 = $tmin_100 K")
+        @test tmin_100 < T_fixed - 1.0
+        @test all(isfinite, g.tk2)
+    end
+
+    @testset "F6 a checkpoint keeps the fixed-surface counts; without them they are 0" begin
+        cfg = fs_config(fs_case())
+        state, coords, _ = fs_mapped_state(cfg)
+        c_run = (; n_fixed=7, n_norock=3, n_rock_out=5, n_norock_steps=2)
+        state.accumulators.fixed_surface_counts = c_run
+        mktempdir() do d
+            path = joinpath(d, "ckpt.jld2")
+            Erebus.save_state(path, state, coords, cfg)
+            st_back, _, _ = Erebus.load_simulation_state(path)
+            @test st_back.accumulators.fixed_surface_counts == c_run
+            # A checkpoint without the accumulators entry restarts the counts at 0
+            data = JLD2.load(path)
+            @test haskey(data, "accumulators")
+            delete!(data, "accumulators")
+            older = joinpath(d, "older.jld2")
+            JLD2.save(older, data)
+            st_old, _, _ = Erebus.load_simulation_state(older)
+            @test st_old.accumulators.fixed_surface_counts ==
+                Erebus.zero_fixed_surface_counts()
+            @test isapprox(st_old.accumulators.rplanet, state.accumulators.rplanet; rtol=0)
+        end
     end
 end

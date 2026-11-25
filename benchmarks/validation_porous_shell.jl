@@ -679,7 +679,9 @@ Check that no step of a finished run with `thermodynamics.surface_temperature = 
 made a free P node without rock fixed: `n_norock` of the last step and `n_norock_steps`
 of the run in `st.accumulators.fixed_surface_counts` are both 0. Such a node would hold
 the disk temperature inside the planet, so the comparison with the 1-D model would not
-hold. A run with `:sticky_air` passes.
+hold. A run with `:sticky_air` passes. The counts cover the steps since the start of the
+run, across restarts from a checkpoint that stores them; a checkpoint whose accumulators
+do not load restarts them at 0, and the check then covers the steps since that restart.
 
 Parameters
 ----------

@@ -114,6 +114,11 @@ pass allocates its own arrays.
 - `state.grids.PHI`
 - `state.grids.BETAPHI`
 - `state.markers.core` (constitutive properties: rhototalm, etatotalm, hrtotalm, ktotalm, etc.)
+- Under `thermodynamics.surface_temperature = :fixed`:
+  - `state.grids.fixed_tk`
+  - `state.accumulators.fixed_surface_counts`
+  - the arrays of `rock_sums` (`WP`, `WPr`, `C`, `E`, `HRr`, `KPr`, `KXr`, `WXr`, `KYr`,
+    `WYr`, `KXu`, `KYu`)
 """
 function interpolate_markers_to_grid!(
     state::SimulationState,

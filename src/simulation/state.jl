@@ -150,7 +150,11 @@ Diagnostic and physical mass accumulators across global simulation evolution.
 `fixed_surface_counts` holds the counts of the last fixed-surface pass
 (`thermodynamics.surface_temperature = :fixed`, see `apply_fixed_surface_temperature!`):
 `n_fixed` fixed P nodes, `n_norock` free nodes without rock made fixed, `n_rock_out` rock
-markers outside `rplanet`, and `n_norock_steps` passes of the run with `n_norock > 0`.
+markers outside `rplanet`, and `n_norock_steps` passes with `n_norock > 0`.
+A checkpoint stores the counts with the accumulators, so they cover the steps since the
+start of the run, across restarts. `load_simulation_state` sets them to 0 when the
+`accumulators` entry of the checkpoint is missing or does not load as
+`SimulationAccumulators`; they then cover the steps since that restart.
 """
 mutable struct SimulationAccumulators
     M_vent_total::Float64

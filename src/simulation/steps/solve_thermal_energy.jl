@@ -173,18 +173,15 @@ it a large explicit sink next to a hot interior, and the solve could take a free
 below the fixed value. Otherwise `g.KX`, `g.KY`.
 
 # Arguments
-
-    - `g`: grid arrays of the state
-    - `ws`: simulation workspaces
-    - `cfg`: simulation configuration
+- `g`: grid arrays of the state
+- `ws`: simulation workspaces
+- `cfg`: simulation configuration
 
 # Returns
-
-    - `(KX, KY)`: conductivities at Vx and Vy nodes [W/(m K)]
+- `(KX, KY)`: conductivities at Vx and Vy nodes [W/(m K)]
 
 # Throws
-
-    - `ArgumentError`: with `:fixed` when `ws.rock_sums` is `nothing`
+- `ArgumentError`: with `:fixed` when `ws.rock_sums` is `nothing`
 """
 function _metric_face_conductivities(g, ws::SimulationWorkspaces, cfg::SimulationConfig)
     cfg.thermodynamics.surface_temperature === :fixed || return g.KX, g.KY

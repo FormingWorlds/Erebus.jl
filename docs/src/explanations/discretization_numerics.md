@@ -553,22 +553,29 @@ It fits an effective radius $R_\text{eff}$ to the free node temperatures and com
 With the planet centre on a node, $|R_\text{eff} - R_p|$ is $0.030\,\Delta x$, $0.016\,\Delta x$ and $0.0086\,\Delta x$ at 33, 65 and 129 nodes per side.
 The observed order is 1.87 to 2.00 for centres shifted by 0, 0.13 and 0.37 cells.
 The test requires an order of at least 1.8 and below 3.0 at each refinement, and an error below 0.05 $\Delta x$ at 129 nodes.
-Without the cut-cell face (the node staircase), the error at 65 nodes is $0.39\,\Delta x$.
+Without the cut-cell face, the surface is the staircase of fixed nodes.
+At 65 nodes and a centre shift of 0.37 cells, the error of this staircase is $0.39\,\Delta x$.
 
 A second grid test takes 1 step from rock at 1000 K without heating.
 The step $\Delta t$ is 1 and 100 times $\Delta x^2/\kappa$, where $\kappa = k/(\rho c_p)$ [m$^2$/s] is the thermal diffusivity.
 At 33 and 65 nodes per side and all 3 centre shifts, no free node goes below the disk temperature.
 With the cut-cell faces in the metric term, the step of $1\,\Delta x^2/\kappa$ at 65 nodes and a shift of 0.13 cells gives 245.4 K against a disk temperature of 250 K.
 
-Limits:
-the solve does not use the staircase of fixed nodes as the surface, so the result depends on the cut-cell face.
+The option has the following limits.
+The solve does not use the staircase of fixed nodes as the surface.
+The result therefore depends on the cut-cell face.
 The order above holds for the grid solve.
-The full step with markers has not been measured against an analytic solution.
-The metric term stays explicit, so a long enough step from a hot interior still takes a free node below the disk temperature.
-In the full step at `Nx = 17` with rock at 1000 K, a step of $10\,\Delta x^2/\kappa$ keeps every free node above 290 K and a step of $100\,\Delta x^2/\kappa$ does not; $\kappa$ is the smallest diffusivity of the free nodes.
+No test has measured the full step with markers against an analytic solution.
+The metric term stays explicit.
+A long enough step from a hot interior therefore still takes a free node below the disk temperature.
+A test takes 1 full step at `Nx = 17` from rock at 1000 K with a disk temperature of 290 K.
+In this test, $\kappa$ is the smallest thermal diffusivity of the free nodes.
+A step of $10\,\Delta x^2/\kappa$ keeps every free node above 290 K.
+A step of $100\,\Delta x^2/\kappa$ takes a free node below 290 K.
 In a run, the thermal iterations shorten a step whose largest temperature change exceeds `time.DTmax` [K].
-A rock marker between the last free node and $R_p$ takes a bilinear increment that includes the increment 0 of the fixed node.
-Subgrid diffusion relaxes such a marker toward the fixed node temperature at the node centre, not at $R_p$.
+A rock marker between the last free node and $R_p$ takes a bilinear increment.
+This increment includes the increment 0 of the fixed node.
+Subgrid diffusion relaxes such a marker toward the fixed node temperature at the node centre and not at $R_p$.
 The heat of that relaxation at fixed nodes leaves the rock as boundary heat.
 The checks are in `test/test_fixed_surface_temperature.jl`.
 The validation case [Porous Shell](../validation/porous_shell.md) runs this option in the complete time loop against a 1-D model.
