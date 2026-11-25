@@ -151,7 +151,7 @@ A pass means that a point lies between the lines of its grid.
 <!-- VALIDATION_RECORD_START: porous_shell_suite -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `ddcd7259`, config SHA-256 `dde8ccf0bfb3`)
+**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `7b4a99c0`, config SHA-256 `dde8ccf0bfb3`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -260,7 +260,7 @@ Open symbols mark runs that reached the limit of 20 Myr while part of the body w
 <!-- VALIDATION_RECORD_START: porous_shell -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `ddcd7259`, config SHA-256 `786b2e84a798`)
+**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `7b4a99c0`, config SHA-256 `786b2e84a798`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
