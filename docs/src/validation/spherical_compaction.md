@@ -225,7 +225,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_compaction -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_compaction.toml` (Source commit `1d3e0171`, config SHA-256 `4b3bb81a6e47`)
+**Validation record**: `benchmarks/records/spherical_compaction.toml` (Source commit `ddcd7259`, config SHA-256 `4b3bb81a6e47`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |

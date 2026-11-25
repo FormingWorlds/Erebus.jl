@@ -151,7 +151,7 @@ A pass means that a point lies between the lines of its grid.
 <!-- VALIDATION_RECORD_START: porous_shell_suite -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `711a9bbf`, config SHA-256 `dde8ccf0bfb3`)
+**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `ddcd7259`, config SHA-256 `dde8ccf0bfb3`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -166,7 +166,7 @@ A pass means that a point lies between the lines of its grid.
 | `s129_25_050` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `2.8125e+03` | `2.4400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
 | `s129_25_050` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `3.4000e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `s129_25_025_k` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `5.0625e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
-| `s129_25_025_k` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `4.7700e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_025_k` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `4.8300e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: porous_shell_suite -->
@@ -260,7 +260,7 @@ Open symbols mark runs that reached the limit of 20 Myr while part of the body w
 <!-- VALIDATION_RECORD_START: porous_shell -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `1d3e0171`, config SHA-256 `786b2e84a798`)
+**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `ddcd7259`, config SHA-256 `786b2e84a798`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |

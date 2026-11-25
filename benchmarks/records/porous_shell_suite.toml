@@ -6,8 +6,8 @@
 id = "porous_shell_suite"
 title = "Porous Shell Suite Validation"
 page = "validation/porous_shell.md"
-src_commit = "711a9bbf51171dbc83ae0efae1cf6c3e413dda09"
-timestamp_utc = "2026-11-24T13:30:02Z"
+src_commit = "ddcd7259907e24e222a145ad0e98f876c2f7cb6b"
+timestamp_utc = "2026-11-25T00:44:49Z"
 julia_version = "1.12.7"
 config_sha256 = "dde8ccf0bfb399500d04dc236cdf63097f606fa546fb1e515cdfec1d1195b1e3"
 reference_type = "1d_fv"
@@ -180,7 +180,7 @@ id = "tmax_rel_l2_s129_25_025_k"
 case = "s129_25_025_k"
 description = "Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr"
 nx = 129
-value = 4.7699999999999999e-02
+value = 4.8300000000000003e-02
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-01
 rtol = 0.0000000000000000e+00
