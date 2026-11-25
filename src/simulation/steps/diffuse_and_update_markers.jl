@@ -197,6 +197,11 @@ $(SIGNATURES)
 
     - nothing
 
+# Throws
+
+    - the errors of `apply_subgrid_temperature_diffusion!`,
+      `limit_marker_temperature_increment!` and `limit_relaxed_marker_temperatures!`
+
 # Notes
 
 The relaxation runs when `solver.dsubgridt > 0` and the time step is positive. From step 2

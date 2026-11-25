@@ -212,6 +212,12 @@ end
         @test_throws DomainError f(args(1.0)...; coords=c.coords, dsubgridt=NaN)
         @test_throws DomainError f(args(-1.0)...; coords=c.coords, dsubgridt=1.0)
         @test_throws DomainError f(args(Inf)...; coords=c.coords, dsubgridt=1.0)
+        # A grid array of the wrong size is an error, not an out-of-bounds write.
+        for k in 6:9
+            a = collect(Any, args(1.0))
+            a[k] = zeros(2, 2)
+            @test_throws ArgumentError f(a...; coords=c.coords, dsubgridt=1.0)
+        end
     end
 
     @testset "the step passes the marker heat capacity and conductivity" begin
@@ -624,6 +630,31 @@ end
             coords=coords,
             tkm_floor=[300.0],
         )
+        g(tk1, tkm_floor) = Erebus.limit_relaxed_marker_temperatures!(
+            [5.0e4],
+            [5.0e4],
+            [1],
+            [300.0],
+            [3.3e6],
+            zeros(sz),
+            zeros(sz),
+            tk1,
+            zeros(sz),
+            zeros(sz),
+            zeros(sz),
+            1;
+            coords=coords,
+            tkm_floor=tkm_floor,
+        )
+        # The two-part limit always has a floor: no floor input is an error.
+        @test_throws MethodError g(nothing, nothing)
+        @test_throws TypeError g(zeros(sz), nothing)
+        err = try
+            g(zeros(2, 2), [300.0])
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("tk1", err.msg)
     end
 
     @testset "the step keeps rock markers above the cold floor" begin

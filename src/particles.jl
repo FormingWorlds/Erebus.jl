@@ -4652,6 +4652,8 @@ bilinear weights, also under the spherical metric.
 # Throws
 
     - `DomainError`: if `dsubgridt` or `dt` is negative or not finite
+    - `ArgumentError`: if `tk1`, `DT`, `TKSUM` or `RHOCPSUM` does not have the size of the
+      P grid
 """
 function apply_subgrid_temperature_diffusion!(
     xm,
@@ -4680,7 +4682,10 @@ function apply_subgrid_temperature_diffusion!(
     if dsubgridt == 0.0 || dt == 0.0
         return nothing
     end
-    Ny1, Nx1 = size(RHOCPSUM)
+    p_size = (coords.Ny1, coords.Nx1)
+    all(a -> size(a) == p_size, (tk1, DT, TKSUM, RHOCPSUM)) ||
+        throw(ArgumentError("tk1, DT, TKSUM and RHOCPSUM must have the size of the P grid"))
+    Ny1, Nx1 = p_size
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     # reset interpolation arrays
     TKSUM .= 0.0
@@ -4766,6 +4771,8 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
     - DEFICIT: scratch array at P nodes for the rejected heat
     - CAPACITY: scratch array at P nodes for the heat capacity of the receiving markers
     - marknum: total number of markers in use
+    - coords: grid coordinates
+    - max_passes: number of passes that hand rejected heat on to receiving markers
     - DT_conduction: the part of `DT` from the solve; the bound starts from the marker
       temperature plus the rest of `DT`, the part of subgrid diffusion
     - w3d: marker out-of-plane length under the spherical metric [m], or `nothing` for
@@ -4950,8 +4957,10 @@ temperature after the first stage. Each stage keeps the heat where a receiving m
 
 # Throws
 
-    - `ArgumentError`: if `DT_conduction` does not have the size of `DT`
-    - the errors of `limit_marker_temperature_increment!`
+    - `ArgumentError`: if `DT_conduction` or `tk1` does not have the size of `DT`, if an
+      array is too short, or if a grid array does not have the size of the P grid
+    - `MethodError`: if `tk1` is not a matrix
+    - `TypeError`: if `tkm_floor` is not a vector
 """
 function limit_relaxed_marker_temperatures!(
     xm,
@@ -4961,17 +4970,18 @@ function limit_relaxed_marker_temperatures!(
     rhocptotalm,
     DT,
     DT_conduction,
-    tk1,
+    tk1::AbstractMatrix,
     tk2,
     DEFICIT,
     CAPACITY,
     marknum;
     coords::GridCoordinates=default_grid_coordinates(),
-    tkm_floor,
+    tkm_floor::AbstractVector,
     w3d=nothing,
 )
     size(DT) == size(DT_conduction) ||
         throw(ArgumentError("DT_conduction must have the size of DT"))
+    size(tk1) == size(DT) || throw(ArgumentError("tk1 must have the size of DT"))
     floor_stats = limit_marker_temperature_increment!(
         xm,
         ym,

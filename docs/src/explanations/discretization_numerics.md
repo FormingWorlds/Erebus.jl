@@ -56,7 +56,7 @@ Material properties, temperature, hydration state, and porosity are carried on t
    $$\delta T_m = \left(T_m - T_{\text{grid}}(x_m, y_m)\right) \left[\exp\left(-d_{\text{subgridt}} \frac{k_m \Delta t}{(\rho c_p)_m} \, 2\left(\frac{1}{\Delta x^2} + \frac{1}{\Delta y^2}\right)\right) - 1\right]$$
    where $k_m$ and $(\rho c_p)_m$ are the marker conductivity and volumetric heat capacity of the step (with the latent heat term when melting is on), and $T_{\text{grid}}$ is the grid temperature of the step start at the marker.
    The heat-capacity-weighted node mean of the corrections is subtracted from the grid increment.
-   So the sum of $(\rho c_p)_m \Delta T_m$ over rock markers does not change, unless the cold floor rejects heat that no marker can take.
+   So without the spherical metric the sum of $(\rho c_p)_m \Delta T_m$ over rock markers does not change, unless the cold floor rejects heat that no marker can take.
    Sticky-air markers take no part, because the next step resets them to the ambient temperature.
    Limits:
    the relaxation time is the diffusion time of one cell, so for low-conductivity rock on a coarse grid it removes only a small part of the difference at each step.
