@@ -15,6 +15,32 @@ const REQUIRED_METADATA_KEYS = (
     "reference_citation",
 )
 
+# The CI record of the melting shell and its suite record at Nx 129 share the keys.
+const MELTING_SHELL_CONFIG_KEYS = (
+    "Nx",
+    "Nr_reference",
+    "n_steps",
+    "dt_yr",
+    "t_form_yr",
+    "phi_init",
+    "porosity_model",
+    "R_planet_m",
+    "L_box_m",
+    "ratio_al",
+    "L_melt_J_kg",
+    "T_solidus_K",
+    "T_liquidus_K",
+    "rho_melt_kg_m3",
+    "rhocp_rock_J_m3K",
+    "k_rock_W_mK",
+    "T_space_K",
+    "surface_temperature",
+    "tmax_l2_T_min_K",
+    "melt_radius_atol_cells",
+    "seed",
+    "spherical_metric",
+)
+
 const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
     "spherical_conduction" => (
         "Nx_coarse",
@@ -162,6 +188,8 @@ const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
         "tmax_rel_l2_limit",
         "tmax_nx_min",
     ),
+    "melting_shell" => MELTING_SHELL_CONFIG_KEYS,
+    "melting_shell_suite" => MELTING_SHELL_CONFIG_KEYS,
 )
 
 const REQUIRED_METRIC_KEYS = (

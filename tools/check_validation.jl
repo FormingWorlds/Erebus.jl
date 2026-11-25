@@ -21,6 +21,10 @@ const DEFAULT_POROUS_SHELL_RECORD = joinpath(VALIDATION_RECORDS_DIR, "porous_she
 const DEFAULT_POROUS_SHELL_SUITE_RECORD = joinpath(
     VALIDATION_RECORDS_DIR, "porous_shell_suite.toml"
 )
+const DEFAULT_MELTING_SHELL_RECORD = joinpath(VALIDATION_RECORDS_DIR, "melting_shell.toml")
+const DEFAULT_MELTING_SHELL_SUITE_RECORD = joinpath(
+    VALIDATION_RECORDS_DIR, "melting_shell_suite.toml"
+)
 
 # Ordered table of the validation records: the no-argument run checks them in this order.
 const VALIDATION_CASES = (
@@ -72,17 +76,34 @@ const VALIDATION_CASES = (
         evaluate=:evaluate_porous_shell_benchmark,
         bench_keyword=:porous_shell_bench,
     ),
+    (;
+        id="melting_shell",
+        module_name=:MeltingShellValidation,
+        file="validation_melting_shell.jl",
+        record=DEFAULT_MELTING_SHELL_RECORD,
+        evaluate=:evaluate_melting_shell_benchmark,
+        bench_keyword=:melting_shell_bench,
+    ),
 )
 
 # Records of runs too long for CI: a static check verifies them without a rerun, after
 # the cases of VALIDATION_CASES.
-const STATIC_VALIDATION_CASES = ((;
-    id="porous_shell_suite",
-    module_name=:PorousShellValidation,
-    file="validation_porous_shell.jl",
-    record=DEFAULT_POROUS_SHELL_SUITE_RECORD,
-    check=:check_suite_record_static,
-),)
+const STATIC_VALIDATION_CASES = (
+    (;
+        id="porous_shell_suite",
+        module_name=:PorousShellValidation,
+        file="validation_porous_shell.jl",
+        record=DEFAULT_POROUS_SHELL_SUITE_RECORD,
+        check=:check_suite_record_static,
+    ),
+    (;
+        id="melting_shell_suite",
+        module_name=:MeltingShellValidation,
+        file="validation_melting_shell.jl",
+        record=DEFAULT_MELTING_SHELL_SUITE_RECORD,
+        check=:check_suite_record_static,
+    ),
+)
 
 """
     static_validation_case(id::AbstractString) -> Union{NamedTuple,Nothing}
@@ -498,7 +519,39 @@ function run_porous_shell_validation_check(
 end
 
 """
-    run_validation_cli(args::Vector{String}=ARGS; bench=nothing, darcy_bench=nothing, compaction_bench=nothing, diffusion_bench=nothing, momentum_bench=nothing, porous_shell_bench=nothing) -> Int
+    run_melting_shell_validation_check(record_path::String=DEFAULT_MELTING_SHELL_RECORD; bench=nothing) -> Bool
+
+Execute the melting shell validation benchmark and verify schema and metric
+reproducibility against `record_path` (see `run_record_check`).
+
+Parameters
+----------
+record_path : String, optional
+    Path to the TOML validation record file.
+bench : Any, optional
+    Pre-evaluated benchmark tuple, or `nothing` to run
+    `MeltingShellValidation.evaluate_melting_shell_benchmark()`.
+
+Returns
+-------
+Bool
+    `true` when all validation and reproducibility checks pass.
+
+Raises
+------
+DomainError
+    If `isempty(record_path)`.
+InterruptException
+    If the run is interrupted.
+"""
+function run_melting_shell_validation_check(
+    record_path::String=DEFAULT_MELTING_SHELL_RECORD; bench=nothing
+)::Bool
+    return run_record_check(validation_case("melting_shell"), record_path; bench=bench)
+end
+
+"""
+    run_validation_cli(args::Vector{String}=ARGS; bench=nothing, darcy_bench=nothing, compaction_bench=nothing, diffusion_bench=nothing, momentum_bench=nothing, porous_shell_bench=nothing, melting_shell_bench=nothing) -> Int
 
 Run the command-line validation check. Without a record path it checks every record of
 `VALIDATION_CASES` in order and collects garbage after each case, then runs the static
@@ -524,6 +577,8 @@ momentum_bench : Any, optional
     Pre-evaluated momentum benchmark tuple, or `nothing` to evaluate on demand.
 porous_shell_bench : Any, optional
     Pre-evaluated porous shell benchmark tuple, or `nothing` to evaluate on demand.
+melting_shell_bench : Any, optional
+    Pre-evaluated melting shell benchmark tuple, or `nothing` to evaluate on demand.
 
 Returns
 -------
@@ -543,6 +598,7 @@ function run_validation_cli(
     diffusion_bench=nothing,
     momentum_bench=nothing,
     porous_shell_bench=nothing,
+    melting_shell_bench=nothing,
 )::Int
     benches = (;
         bench,
@@ -551,6 +607,7 @@ function run_validation_cli(
         diffusion_bench,
         momentum_bench,
         porous_shell_bench,
+        melting_shell_bench,
     )
     record_path = nothing
     for arg in args

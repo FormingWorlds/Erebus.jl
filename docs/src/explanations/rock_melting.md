@@ -66,7 +66,7 @@ $$\rho c_{p,\text{eff}} = \rho c_p + \rho_s L_m \frac{\partial F_m}{\partial T}$
 
 Because $\Delta T_{\text{melt}} = T_l(P) - T_s(P)$ remains constant under the parallel Clapeyron shift, the derivative in the melting interval is constant:
 
-$$\frac{\partial F_m}{\partial T} = \begin{cases} \frac{1}{T_l - T_s} & \text{if } T_s(P) \le T \le T_l(P) \\ 0.0 & \text{otherwise} \end{cases}$$
+$$\frac{\partial F_m}{\partial T} = \begin{cases} \frac{1}{T_l - T_s} & \text{if } T_s(P) < T < T_l(P) \\ 0.0 & \text{otherwise} \end{cases}$$
 
 Integrating the effective heat capacity over the solidus-liquidus interval yields the exact total latent heat enthalpy:
 

@@ -1128,12 +1128,13 @@ end
                     diffusion_bench=empty_bench,
                     momentum_bench=empty_bench,
                     porous_shell_bench=bench,
+                    melting_shell_bench=empty_bench,
                 ),
             )
             @test no_arg.value == 1
             @test occursin("porous_shell.toml", no_arg.out)
             @test occursin("[reproducibility]", no_arg.err)
-            @test last(VALIDATION_CASES).id == "porous_shell"
+            @test VALIDATION_CASES[end - 1].id == "porous_shell"
 
             # A tampered record: a moved value, a changed configuration and its hash
             tampered = deepcopy(raw_record)
