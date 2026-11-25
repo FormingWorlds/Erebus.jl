@@ -396,7 +396,7 @@ end
         limit = MSV.metric_limit("centre_tmax_nx65").atol
         @test no_lat.T_centre - nominal.T_centre > limit
         @test nominal.T_centre - high_lat.T_centre > limit
-        # The shift of 0.75 L is far outside the seed band of the CI record
+        # The shift of 0.75 L is 10 times the seed band of the Nx 65 record
         @test low_lat.T_centre - nominal.T_centre > 10 * MSV.SEED_BAND_CENTRE_TMAX
         # The melt radius stays within its 1.5-cell band for all 4 runs
         @test all(abs(r.r_melt_error_cells) <= 1.5 for r in runs)

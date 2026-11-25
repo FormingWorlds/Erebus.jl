@@ -13,7 +13,7 @@ The page has 4 parts:
 
 - a case that CI runs on every pull request, with recorded values;
 - the same case on a finer grid, run by hand, with recorded values;
-- runs with a wrong latent heat: 2 must fail the check, and 1 shows what the check cannot catch;
+- runs with a wrong latent heat: 2 must fail the limit of the centre temperature, and 1 passes it and only the record catches it;
 - the error that comes from the time step alone.
 
 Each case says why the check exists, what it tests, how we know the right answer and why it matters.
@@ -112,8 +112,8 @@ The grid error puts the centre 11.6 K below the 1-D value, so it uses most of th
 A latent heat that is too low makes the centre too hot, and the limit leaves room for that.
 So a latent heat 25 % too low, 0.75 times the case value, passes the limit of the centre temperature.
 The [part on a wrong latent heat](#Runs-with-a-wrong-latent-heat) shows such a run at `Nx = 41`.
-The physics regression band of the record catches it.
-A new run must keep the centre temperature within 0.382 K of the recorded value, three times its spread over marker seeds.
+The record catches it: a new run must replay the recorded values and stay inside the physics regression bands.
+The band of the centre temperature is 0.382 K around the recorded value, 3 times its spread over marker seeds.
 A run at 0.75 times the latent heat moves the centre by far more than that.
 
 This case cannot see the factor $1 - \phi_d$ on the latent term, where $\phi_d$ is the dry porosity of a marker.
@@ -190,7 +190,7 @@ This part shows that the limit of the centre temperature fails for 2 wrong laten
 Erebus runs the case with no latent heat ($L = 0$) and with 1.5 times the latent heat.
 Both runs are compared with the 1-D model at the correct latent heat.
 The test uses `Nx = 41`, the coarsest grid on which the run with the correct latent heat passes the limit of 20 K.
-A fourth run with 0.75 times the latent heat shows a wrong latent heat that the limit does not catch.
+The test also runs the correct latent heat and 0.75 times it, a wrong latent heat that the limit does not catch.
 
 **How we know the right answer.**
 Without latent heat the rock warms faster and the centre gets hotter.
@@ -199,7 +199,7 @@ With more latent heat the centre stays cooler.
 **Why it matters.**
 The 20 K limit separates the correct latent heat from the 2 wrong ones.
 It does not separate the correct latent heat from 0.75 times that value.
-The melt radius does not separate them, so its row is a regression band only.
+The melt radius does not separate any of the 4 runs, so its row is a regression band only.
 
 **How to read the plot.**
 Panel (b) of the figure above shows the centre temperature of Erebus at `Nx = 65` for the 3 latent heats.

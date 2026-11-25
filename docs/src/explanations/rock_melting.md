@@ -72,9 +72,9 @@ Integrating the effective heat capacity over the solidus-liquidus interval yield
 
 $$\int_{T_s}^{T_l} \left(\rho c_{p,\text{eff}} - \rho c_p\right) \, dT = \rho_s L_m \int_{T_s}^{T_l} \frac{1}{T_l - T_s} \, dT = \rho_s L_m$$
 
-This integral is exact, so a cell that crosses the whole interval takes up the full latent heat.
+This integral is exact, so in the limit of small steps a cell that crosses the whole interval takes up the full latent heat.
 Erebus takes the heat capacity at the temperature of the start of each step and does no non-linear enthalpy iterations.
-A cell that enters or leaves the interval within a step therefore takes the latent heat one step late.
+A cell that enters or leaves the interval within a step therefore takes the latent heat one step late, and its total latent heat can differ from $\rho_s L_m$ by up to the latent heat of one step.
 This lag is an enthalpy error of first order in the time step, as the section on [thermal subcycles](discretization_numerics.md#3.-Thermal-Subcycles-and-Temperature-Change-Limit) explains.
 
 ---
