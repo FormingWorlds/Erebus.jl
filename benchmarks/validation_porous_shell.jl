@@ -198,6 +198,20 @@ function q_al_step(t::Float64, dt::Float64, ratio_al::Float64)
 end
 
 """
+    rhocp_app_ref(T, phi; L_melt, T_sol, T_liq) -> Float64
+
+Apparent volumetric heat capacity [J/(m^3 K)] of rock with dry porosity `phi` at `T` [K]
+for latent heat `L_melt` [J/kg] over the melting interval `T_sol` to `T_liq` [K]:
+`(1 - phi) (RHOCP_SOL + RHO_SOL L_melt / (T_liq - T_sol))` for `T_sol < T < T_liq`, the
+sensible term alone outside. `solve_porous_sphere` takes its heat capacity from here.
+"""
+function rhocp_app_ref(T, phi; L_melt, T_sol, T_liq)
+    C = RHOCP_SOL * (1.0 - phi)
+    T_sol < T < T_liq && (C += RHO_SOL * L_melt / (T_liq - T_sol) * (1.0 - phi))
+    return C
+end
+
+"""
     solve_porous_sphere(; R, phi_init, t_form_yr, t_end_yr, dt_yr, Nr=2000,
                         ratio_al=RATIO_AL_L16, T0=T_SPACE, stop_cold=true,
                         melt=nothing) -> NamedTuple
@@ -208,9 +222,9 @@ porosity step at the new temperature and the pressure of the old porosity (the o
 an Erebus step). At the start the porosity is cold pressed on the hydrostatic profile.
 The run stops at `t_end_yr` after formation, or with `stop_cold` once the peak has passed
 and every cell is below `T_SINTER` (no further sintering).
-With `melt = (; L_melt, T_sol, T_liq)` the heat capacity of the step adds the latent heat
-`RHO_SOL L_melt / (T_liq - T_sol)` for `T_sol < T < T_liq` at the temperature of the step
-start (the Erebus order), times `1 - phi`.
+With `melt = (; L_melt, T_sol, T_liq)` the heat capacity of the step is `rhocp_app_ref` at
+the temperature of the step start (the Erebus order): it adds the latent heat
+`RHO_SOL L_melt / (T_liq - T_sol)` for `T_sol < T < T_liq`, times `1 - phi`.
 
 Returns `(; r, phi, phi0, dphi_sinter, T, T_max, d_shell, d_phi04, t_peak_yr, T_peak,
 t_stop_yr, energy_residual, enthalpy_residual, F_max, n_steps)`: profiles at the cell centres, the depth [m] of the
@@ -236,7 +250,6 @@ function solve_porous_sphere(;
     if melt !== nothing
         melt.T_sol < melt.T_liq ||
             throw(ArgumentError("melt.T_sol must be below melt.T_liq, got $melt"))
-        c_lat = RHO_SOL * melt.L_melt / (melt.T_liq - melt.T_sol)
         h_s =
             T ->
                 RHOCP_SOL * (T - T0) +
@@ -269,11 +282,10 @@ function solve_porous_sphere(;
     for n in 1:nmax
         P = hydrostatic_pressure(phi, R)
         k = [k_porous_ref(K_SOL, p) for p in phi]
-        C = RHOCP_SOL .* (1.0 .- phi)
-        if melt !== nothing
-            for i in 1:Nr
-                melt.T_sol < T[i] < melt.T_liq && (C[i] += c_lat * (1.0 - phi[i]))
-            end
+        C = if melt === nothing
+            RHOCP_SOL .* (1.0 .- phi)
+        else
+            [rhocp_app_ref(T[i], phi[i]; melt.L_melt, melt.T_sol, melt.T_liq) for i in 1:Nr]
         end
         H = RHO_BULK .* (1.0 .- phi) .* q_al_step(t, dt, ratio_al)
         # Face conductances: harmonic mean inside, half cell to the Dirichlet surface

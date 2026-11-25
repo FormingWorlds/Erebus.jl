@@ -64,12 +64,14 @@ end
 @testset "Melting Shell Validation" begin
     @testset "Marker heat capacity with latent heat at unsintered porosity" begin
         rhocp_s, rho_s, dT = 3.3e6, 3300.0, 400.0
+        # At L 4e5 the latent term rho L / dT equals rho cp; at 6e5 it is 4.95e6, so this
+        # loop tells the 2 terms apart
         for L in (4.0e5, 6.0e5)
             cfg = MSV.make_melting_shell_config(;
                 Nx=17, phi_init=0.25, t_form_yr=1.3e6, n_steps=1, dt_yr=5.0e4, L_melt=L
             )
             @test cfg.melting.active
-            @test cfg.melting.rho_melt == rho_s
+            @test isapprox(cfg.melting.rho_melt, rho_s; rtol=1e-14)
             st, coords, ws = _ms_state(cfg)
             # Inside the interval: (1 - phi_d) (rho cp + rho L / (T_l - T_s))
             rock = _ms_marker_step!(st, coords, ws, cfg, 1600.0, 0.40)
@@ -83,8 +85,6 @@ end
                 )
             end
         end
-        # Ste != 1 at L 6e5: latent term 4.95e6 differs from rho cp 3.3e6
-        @test 3300.0 * 6.0e5 / 400.0 != 3.3e6
     end
 
     @testset "Melting leaves the radiogenic heat of a marker unchanged" begin
@@ -97,10 +97,12 @@ end
             st.markers.hrtotalm[rock]
         end
         @test all(>(0.0), hr[1])
-        @test hr[1] == hr[2]
+        # Zero tolerances: the radiogenic heat agrees exactly
+        @test isapprox(hr[1], hr[2]; rtol=0.0, atol=0.0)
     end
 
     @testset "Reference heat capacity matches the Erebus law" begin
+        # solve_porous_sphere takes its heat capacity from this law (PSV.rhocp_app_ref)
         for L in (4.0e5, 6.0e5),
             phi in (0.0, 0.4),
             T in (1000.0, 1400.0, 1401.0, 1799.0, 1800.0, 2000.0)
@@ -123,7 +125,11 @@ end
         b = MSV.PSV.solve_porous_sphere(;
             kw..., melt=(; L_melt=0.0, T_sol=1400.0, T_liq=1800.0)
         )
-        @test a.T == b.T && a.T_max == b.T_max && a.phi == b.phi && a.d_shell == b.d_shell
+        # Zero tolerances: the 2 runs agree exactly
+        @test isapprox(a.T, b.T; rtol=0.0, atol=0.0)
+        @test isapprox(a.T_max, b.T_max; rtol=0.0, atol=0.0)
+        @test isapprox(a.phi, b.phi; rtol=0.0, atol=0.0)
+        @test isapprox(a.d_shell, b.d_shell; rtol=0.0, atol=0.0)
         # Without latent heat the stepwise enthalpy closes to round-off
         @test a.enthalpy_residual < 1e-10
     end
@@ -200,7 +206,7 @@ end
             melt=(; L_melt=6.0e5, T_sol=1400.0, T_liq=1800.0),
         )
         @test r6.T_peak < r[1].T_peak - 1.0
-        @test r[1].F_max[1] == MSV.melt_fraction_ref(r[1].T_max[1])
+        @test isapprox(r[1].F_max[1], MSV.melt_fraction_ref(r[1].T_max[1]); atol=1e-14)
     end
 
     @testset "Melt radius from centre-anchored bins of the peak temperature" begin
@@ -357,7 +363,7 @@ end
         @test_throws DomainError MSV.lag_shift(; divisor=0, coarse=lag.coarse)
     end
 
-    @testset "Runs with L = 0 and 1.5 L fail the centre temperature limit at Nx = 41" begin
+    @testset "L = 0 and 1.5 L fail, 0.75 L passes the centre limit at Nx = 41" begin
         # Nx 41 is the coarsest grid where the run at L passes the 20 K limit of Nx 65.
         ref = MSV.reference_solution()
         kw = (;
@@ -372,26 +378,33 @@ end
         nominal = MSV.run_melting_shell_case(; kw..., L_melt=MSV.L_MELT)
         no_lat = MSV.run_melting_shell_case(; kw..., L_melt=0.0)
         high_lat = MSV.run_melting_shell_case(; kw..., L_melt=L_high)
-        runs = (nominal, no_lat, high_lat)
+        low_lat = MSV.run_melting_shell_case(; kw..., L_melt=0.75 * MSV.L_MELT)
+        runs = (nominal, no_lat, high_lat, low_lat)
         pass(r) = MSV.metric_passes("centre_tmax_nx65", r.T_centre, r.T_centre_ref)
         @test pass(nominal)
         @test !pass(no_lat)
         @test !pass(high_lat)
-        # Errors against the 1-D model at L: -16.0 K, +89.5 K and -46.2 K
+        # A latent heat 25 % low passes: the grid error sits on the low side of the window
+        @test pass(low_lat)
+        # Errors against the 1-D model at L: -16.0 K, +89.5 K, -46.2 K and +3.0 K
         @test isapprox(nominal.T_centre_error, -16.0; atol=0.05)
         @test isapprox(no_lat.T_centre_error, 89.5; atol=0.05)
         @test isapprox(high_lat.T_centre_error, -46.2; atol=0.05)
+        @test isapprox(low_lat.T_centre_error, 3.0; atol=0.05)
         @test isapprox(20.0 - abs(nominal.T_centre_error), 4.0; atol=0.05)
         # The shift from the latent heat alone, on the same grid, exceeds the limit
         limit = MSV.metric_limit("centre_tmax_nx65").atol
         @test no_lat.T_centre - nominal.T_centre > limit
         @test nominal.T_centre - high_lat.T_centre > limit
-        # The melt radius stays within its 1.5-cell band for all 3 runs
+        # The shift of 0.75 L is far outside the seed band of the CI record
+        @test low_lat.T_centre - nominal.T_centre > 10 * MSV.SEED_BAND_CENTRE_TMAX
+        # The melt radius stays within its 1.5-cell band for all 4 runs
         @test all(abs(r.r_melt_error_cells) <= 1.5 for r in runs)
-        # L2 of the hot bins: 0.0289 at L, 0.0481 at L = 0, 0.0391 at 1.5 L
+        # L2 of the hot bins: 0.0289 at L, 0.0481 at 0, 0.0391 at 1.5 L, 0.0254 at 0.75 L
         @test isapprox(nominal.tmax_rel_l2, 0.0289; atol=1e-4)
         @test isapprox(no_lat.tmax_rel_l2, 0.0481; atol=1e-4)
         @test isapprox(high_lat.tmax_rel_l2, 0.0391; atol=1e-4)
+        @test isapprox(low_lat.tmax_rel_l2, 0.0254; atol=1e-4)
         @test all(r.energy_lse_residual <= 1.0e-9 for r in runs)
     end
 
@@ -507,6 +520,16 @@ end
             @test !ok_l
             @test any(occursin("fails its limit", e) for e in errs_l)
             @test any(occursin("physics regression band", e) for e in errs_l)
+            # A centre 19.5 K high (a run at 0.75 L, measured once) passes the limit,
+            # but the regression band of 0.382 K catches it
+            @test isapprox(MSV.SEED_BAND_CENTRE_TMAX, 0.382; rtol=1e-14)
+            hot_metrics = copy(bench.metrics)
+            hot_metrics["centre_tmax_nx65"] += 19.5
+            hot = (; bench..., metrics=hot_metrics)
+            ok_h, errs_h = MSV.check_validation_reproducibility(hot, MS_RECORD)
+            @test !ok_h
+            @test !any(occursin("fails its limit", e) for e in errs_h)
+            @test any(occursin("physics regression band", e) for e in errs_h)
 
             out = joinpath(dir, "exported.toml")
             commit = String(raw["metadata"]["src_commit"])

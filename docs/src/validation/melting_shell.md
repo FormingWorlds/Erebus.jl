@@ -13,7 +13,7 @@ The page has 4 parts:
 
 - a case that CI runs on every pull request, with recorded values;
 - the same case on a finer grid, run by hand, with recorded values;
-- runs with a wrong latent heat, which must fail the check;
+- runs with a wrong latent heat: 2 must fail the check, and 1 shows what the check cannot catch;
 - the error that comes from the time step alone.
 
 Each case says why the check exists, what it tests, how we know the right answer and why it matters.
@@ -43,7 +43,7 @@ The box "Test details" at the end of each case gives the reference, the toleranc
 
 **Why this check exists.**
 The time loop could give the wrong heat capacity to a marker inside the melting range, or none.
-It could also take the latent heat at the wrong temperature or with the wrong porosity factor.
+It could also take the latent heat at the wrong temperature.
 The molten centre would then reach the wrong peak temperature.
 
 **What it tests.**
@@ -108,6 +108,18 @@ The melt radius of Erebus is about 1 cell inside the 1-D value on both grids: 75
 Erebus measures the melt radius in radial bins of half a cell, so it moves in steps of 375 m at `Nx = 65`.
 The row of the melt radius is a regression band: it catches a large change, but the runs with a wrong latent heat below stay inside it.
 
+The grid error puts the centre 11.6 K below the 1-D value, so it uses most of the 20 K limit on the low side.
+A latent heat that is too low makes the centre too hot, and the limit leaves room for that.
+So a latent heat 25 % too low, 0.75 times the case value, passes the limit of the centre temperature.
+The [part on a wrong latent heat](#Runs-with-a-wrong-latent-heat) shows such a run at `Nx = 41`.
+The physics regression band of the record catches it.
+A new run must keep the centre temperature within 0.382 K of the recorded value, three times its spread over marker seeds.
+A run at 0.75 times the latent heat moves the centre by far more than that.
+
+This case cannot see the factor $1 - \phi_d$ on the latent term, where $\phi_d$ is the dry porosity of a marker.
+Rock above the solidus has sintered to almost no porosity, so the factor is 1 to round-off there.
+The testset "Marker heat capacity with latent heat at unsintered porosity" checks the factor at $\phi_d = 0.40$, where the factor changes the heat capacity.
+
 !!! details "Test details"
     - Reference: `solve_porous_sphere` in `benchmarks/validation_porous_shell.jl`, with the same time step and number of steps, through `run_melting_shell_case` in `benchmarks/validation_melting_shell.jl`.
     - Tolerance:
@@ -116,7 +128,7 @@ The row of the melt radius is a regression band: it catches a large change, but 
         - the relative L2 error of $T_{max} - 290$ K over the bins where the 1-D peak temperature is at least 1100 K: at most 0.04;
         - the energy residual of the last heat solve: at most $10^{-9}$ of the stored and released heat;
         - the enthalpy residual of the 1-D model: at most 0.01 of the deposited heat.
-    - Test id: `centre_tmax_nx65`, `melt_radius_nx65`, `tmax_rel_l2_hot_nx65`, `energy_lse_residual_nx65`, `enthalpy_residual_1d`.
+    - Test id: `centre_tmax_nx65`, `melt_radius_nx65`, `tmax_rel_l2_hot_nx65`, `energy_lse_residual_nx65`, `enthalpy_residual_1d`; the regression band in testset "CI record: reproducibility, tampering and export round trip" and the porosity factor in testset "Marker heat capacity with latent heat at unsintered porosity", both in `test/test_melting_shell.jl`.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
 ---
@@ -138,7 +150,9 @@ At the centre of the first bin of `Nx = 129` its peak temperature is 1661.3 K.
 **Why it matters.**
 The errors fall when the cell size halves, so the agreement is a property of the method and not of one grid.
 
-The plot is panel (a) of the figure above, with the points of `Nx = 129`.
+**How to read the plot.**
+This case shares the figure of the CI case above: panel (a) shows the points of `Nx = 129`.
+A pass means that the first point of `Nx = 129` lies within 10 K of the 1-D line.
 
 ```@raw html
 <!-- VALIDATION_RECORD_START: melting_shell_suite -->
@@ -166,16 +180,17 @@ The plot is panel (a) of the figure above, with the points of `Nx = 129`.
 
 ---
 
-## Runs with a wrong latent heat fail the check
+## Runs with a wrong latent heat
 
 **Why this check exists.**
 A check that passes for every latent heat would not test the latent heat.
-This part shows that the limit of the centre temperature fails when the latent heat is wrong.
+This part shows that the limit of the centre temperature fails for 2 wrong latent heats.
 
 **What it tests.**
 Erebus runs the case with no latent heat ($L = 0$) and with 1.5 times the latent heat.
 Both runs are compared with the 1-D model at the correct latent heat.
 The test uses `Nx = 41`, the coarsest grid on which the run with the correct latent heat passes the limit of 20 K.
+A fourth run with 0.75 times the latent heat shows a wrong latent heat that the limit does not catch.
 
 **How we know the right answer.**
 Without latent heat the rock warms faster and the centre gets hotter.
@@ -183,6 +198,7 @@ With more latent heat the centre stays cooler.
 
 **Why it matters.**
 The 20 K limit separates the correct latent heat from the 2 wrong ones.
+It does not separate the correct latent heat from 0.75 times that value.
 The melt radius does not separate them, so its row is a regression band only.
 
 **How to read the plot.**
@@ -194,13 +210,16 @@ A run passes when its point lies inside the band.
 At `Nx = 41` the centre temperature is 16.0 K below the 1-D value with the correct latent heat.
 It is 89.5 K above it without latent heat and 46.2 K below it with 1.5 times the latent heat.
 The run with the correct latent heat passes the limit by 4.0 K only, because the grid is coarse.
+With 0.75 times the latent heat the centre is 3.0 K above the 1-D value, so this run passes the limit.
+The grid error puts the correct run low in the window, and a latent heat that is too low moves the centre up into it.
 The relative L2 error of the hot bins is 0.0289 with the correct latent heat, 0.0481 without latent heat and 0.0391 with 1.5 times the latent heat.
 So the L2 row alone does not catch 1.5 times the latent heat on this grid.
+With 0.75 times the latent heat the L2 error is 0.0254, smaller than with the correct latent heat.
 
 !!! details "Test details"
     - Reference: the 1-D model at the correct latent heat.
     - Tolerance: the limit of `centre_tmax_nx65`, 20 K.
-    - Test id: testset "Runs with L = 0 and 1.5 L fail the centre temperature limit at Nx = 41" in `test/test_melting_shell.jl`.
+    - Test id: testset "L = 0 and 1.5 L fail, 0.75 L passes the centre limit at Nx = 41" in `test/test_melting_shell.jl`.
     - Command: `julia --project=. -e 'using Test; include("test/test_melting_shell.jl")'`.
 
 ---
@@ -225,11 +244,13 @@ The enthalpy residual of the 1-D model falls by a factor of about 10 with the st
 The time step must keep this error small against the limit of the centre temperature.
 Otherwise a pass could hide an error of the time step.
 
+**How to read the plot.**
+There is nothing to plot here: the result is 2 numbers.
+
 **Known limit.**
 The step of 25 kyr makes the centre 1.42 K hotter and the melt radius 50 m larger than the step of 2.5 kyr.
 The shift of the centre is less than a third of the limit of 20 K at `Nx = 65` and of 10 K at `Nx = 129`.
 The enthalpy residual of the 1-D model is 0.0061 of the deposited heat at the case step.
-There is nothing to plot here: the result is 2 numbers.
 
 !!! details "Test details"
     - Reference: the 1-D model at a step 10 times smaller.
@@ -249,7 +270,8 @@ These limits hold in Erebus and in the 1-D model alike, so the comparison above 
 - The dry porosity of a marker does not change when it melts.
   In this case the rock above the solidus has sintered to almost no porosity, so this hardly matters here.
 - The planet radius stays fixed while the rock sinters, so the body does not shrink.
-- Only the silicate melting law acts: `porosity.model = "henke2012"` turns off core formation (metal percolation and settling) and magma transport, so neither metal nor melt moves.
+- Only the silicate melting law acts, so neither metal nor melt moves.
+  The porosity model `porosity.model = "henke2012"` requires core formation (metal percolation and settling) and magma transport off: the configuration check throws an `ArgumentError` if one of them is on.
 - The melt does not raise the conductivity of the rock: there is no effective conductivity of convecting melt.
 - The melt has the density of the solid, so it does not rise.
 

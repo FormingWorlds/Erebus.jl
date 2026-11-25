@@ -35,11 +35,11 @@ end
 
 Apparent volumetric heat capacity [J/(m^3 K)] of rock with dry porosity `phi` at `T` [K]:
 `(1 - phi) (RHOCP_SOL + RHO_SOL L_melt / (T_liq - T_sol))` for `T_sol < T < T_liq`, the
-sensible term alone outside.
+sensible term alone outside. This is `PSV.rhocp_app_ref`, the law of the 1-D reference
+`solve_porous_sphere`, with the latent heat and the interval of the case as defaults.
 """
 function rhocp_app_ref(T, phi; L_melt=L_MELT, T_sol=T_SOL, T_liq=T_LIQ)
-    c = PSV.RHOCP_SOL + (T_sol < T < T_liq ? PSV.RHO_SOL * L_melt / (T_liq - T_sol) : 0.0)
-    return (1.0 - phi) * c
+    return PSV.rhocp_app_ref(T, phi; L_melt, T_sol, T_liq)
 end
 
 """

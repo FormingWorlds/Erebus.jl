@@ -115,9 +115,20 @@ def figure(run_dir, t):
             color=t[f"c{nx}"],
             label=f"Erebus, Nx = {nx}",
         )
+    # Labels at the right end, above their lines, clear of the data (below the solidus
+    # there) and of the melt radius ticks
     for temp, name in ((T_SOL_K, "solidus"), (T_LIQ_K, "liquidus")):
         a.axhline(temp, color=t["fg"], lw=1.1, ls=":")
-        a.text(0.3, temp + 8.0, f"{name} {temp:.0f} K", color=t["fg"], fontsize=8.5)
+        a.annotate(
+            f"{name} {temp:.0f} K",
+            (19.8, temp),
+            xytext=(0, 4),
+            textcoords="offset points",
+            ha="right",
+            va="bottom",
+            color=t["fg"],
+            fontsize=8.5,
+        )
     marks = [(t["ref"], "-", float(result(run_dir, "nx65")["r_melt_ref"]))]
     marks += [
         (t[f"c{nx}"], "--", float(result(run_dir, f"nx{nx}")["r_melt"])) for nx in (65, 129)
