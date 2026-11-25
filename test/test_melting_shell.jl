@@ -170,4 +170,65 @@ end
         @test r6.T_peak < r[1].T_peak - 1.0
         @test r[1].F_max[1] == MSV.melt_fraction_ref(r[1].T_max[1])
     end
+
+    @testset "Melt radius from centre-anchored bins of the peak temperature" begin
+        # Polar lattice of markers: 16 sectors, radial spacing dr / 4
+        R_p, dr = 2.0e4, 500.0
+        lattice(Rmax) = [
+            (r * cos(a), r * sin(a)) for r in (dr / 8):(dr / 4):Rmax for
+            a in range(0, 2pi; length=97)[1:96]
+        ]
+        pts = lattice(R_p)
+        xm, ym = first.(pts), last.(pts)
+        rr = hypot.(xm, ym)
+        f(prof) = MSV.melt_radius(xm, ym, prof.(rr); xc=0.0, yc=0.0, R_p=R_p, dr=dr)
+        @test f(r -> r < 7500.0 ? 1600.0 : 1000.0) == 7500.0
+        @test f(r -> 1000.0) == 0.0
+        @test f(r -> 1600.0) == R_p
+        # A hot ring outside a cold bin does not extend the radius
+        @test f(r -> (r < 5000.0 || 6000.0 <= r < 7000.0) ? 1600.0 : 1000.0) == 5000.0
+        # Exactly at the solidus a bin is not molten
+        @test f(r -> r < 7500.0 ? 1600.0 : 1400.0) == 7500.0
+        @test f(r -> r < 7500.0 ? 1400.0 : 1000.0) == 0.0
+        # Empty bins are skipped
+        keep = .!(3000.0 .<= rr .< 3500.0)
+        @test MSV.melt_radius(
+            xm[keep],
+            ym[keep],
+            [r < 7500.0 ? 1600.0 : 1000.0 for r in rr[keep]];
+            xc=0.0,
+            yc=0.0,
+            R_p=R_p,
+            dr=dr,
+        ) == 7500.0
+        # Median over sectors: 8 sectors to 7.5 km, 8 sectors to 8.5 km
+        ang = mod.(atan.(ym, xm), 2pi)
+        T2 = [
+            (a < pi ? r < 7500.0 : r < 8500.0) ? 1600.0 : 1000.0 for (r, a) in zip(rr, ang)
+        ]
+        @test MSV.melt_radius(xm, ym, T2; xc=0.0, yc=0.0, R_p=R_p, dr=dr) == 8000.0
+        # R_p / dr not an integer: the outer bin ends at R_p; markers at r >= R_p are ignored
+        R2 = 2.02e4
+        pts2 = lattice(R2 + 400.0)
+        x2, y2 = first.(pts2), last.(pts2)
+        r2 = hypot.(x2, y2)
+        T3 = [r < R2 ? 1600.0 : 1000.0 for r in r2]
+        @test MSV.melt_radius(x2, y2, T3; xc=0.0, yc=0.0, R_p=R2, dr=dr) == R2
+        # Offset centre
+        @test MSV.melt_radius(
+            xm .+ 1.0e4,
+            ym .- 3.0e3,
+            [r < 7500.0 ? 1600.0 : 1000.0 for r in rr];
+            xc=1.0e4,
+            yc=-3.0e3,
+            R_p=R_p,
+            dr=dr,
+        ) == 7500.0
+        @test_throws ArgumentError MSV.melt_radius(
+            [0.0], [0.0, 1.0], [1.0]; xc=0.0, yc=0.0, R_p=R_p, dr=dr
+        )
+        @test_throws DomainError MSV.melt_radius(
+            [0.0], [0.0], [1.0]; xc=0.0, yc=0.0, R_p=R_p, dr=0.0
+        )
+    end
 end
