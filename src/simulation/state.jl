@@ -146,6 +146,11 @@ end
 
 """
 Diagnostic and physical mass accumulators across global simulation evolution.
+
+`fixed_surface_counts` holds the counts of the last fixed-surface pass
+(`thermodynamics.surface_temperature = :fixed`, see `apply_fixed_surface_temperature!`):
+`n_fixed` fixed P nodes, `n_norock` free nodes without rock made fixed, `n_rock_out` rock
+markers outside `rplanet`, and `n_norock_steps` passes of the run with `n_norock > 0`.
 """
 mutable struct SimulationAccumulators
     M_vent_total::Float64
@@ -168,6 +173,21 @@ mutable struct SimulationAccumulators
     M_escaped_species::Union{Nothing,Dict{Symbol,Float64}}
     core_budgets::Any
     regional_mineral_modes::Any
+    fixed_surface_counts::@NamedTuple{
+        n_fixed::Int, n_norock::Int, n_rock_out::Int, n_norock_steps::Int
+    }
+end
+
+"""
+Return the counts of the fixed-surface pass before its first call.
+
+$(SIGNATURES)
+
+# Returns
+- `NamedTuple`: `n_fixed`, `n_norock`, `n_rock_out` and `n_norock_steps`, all 0
+"""
+function zero_fixed_surface_counts()
+    return (; n_fixed=0, n_norock=0, n_rock_out=0, n_norock_steps=0)
 end
 
 function Base.copy(a::SimulationAccumulators)
@@ -192,6 +212,7 @@ function Base.copy(a::SimulationAccumulators)
         a.M_escaped_species === nothing ? nothing : copy(a.M_escaped_species),
         a.core_budgets === nothing ? nothing : deepcopy(a.core_budgets),
         a.regional_mineral_modes === nothing ? nothing : deepcopy(a.regional_mineral_modes),
+        a.fixed_surface_counts,
     )
 end
 

@@ -245,6 +245,7 @@ using ArgParse
             nothing,
             nothing,
             nothing,
+            Erebus.zero_fixed_surface_counts(),
         )
         state = SimulationState(
             grids,

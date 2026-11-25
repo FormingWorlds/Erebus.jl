@@ -3,6 +3,7 @@ using LinearAlgebra
 using Random
 using SparseArrays
 using Test
+using Logging
 
 isdefined(@__MODULE__, :PorousShellValidation) ||
     include(joinpath(@__DIR__, "..", "benchmarks", "validation_porous_shell.jl"))
@@ -15,6 +16,9 @@ const FS_H = 1.0e-6
 const FS_TS = 250.0
 const FS_R = 20.0e3
 const FS_L = 50.0e3
+# Bound [bytes] on one fixed-surface pass with workspace sums: 0 measured at Nx 17 and 65;
+# 32560 at Nx 17 when the pass allocates its sums
+const FS_ALLOC_BOUND = 512
 
 """
 Grid of `N` x `N` basic nodes in a box of `FS_L`, sphere of radius `FS_R` centred at the
@@ -124,9 +128,83 @@ function fs_config(cfg::SimulationConfig; surface_temperature=:fixed, kwargs...)
     )
 end
 
-function fs_case(; Nx=17, n_steps=2)
+function fs_case(; Nx=17, n_steps=2, k_air=nothing)
     return FS_PSV.make_porous_shell_config(;
-        Nx=Nx, phi_init=0.25, t_form_yr=2.5e6, n_steps=n_steps, dt_yr=5.0e4
+        Nx=Nx, phi_init=0.25, t_form_yr=2.5e6, n_steps=n_steps, dt_yr=5.0e4, k_air=k_air
+    )
+end
+
+# Set up a state of `cfg` and run the start of step 1 up to the marker-to-grid mapping.
+function fs_mapped_state(cfg)
+    state, coords, ws, tel, _ = init_simulation(cfg; output_path=mktempdir())
+    tel isa IO && close(tel)
+    state.timestep = 1
+    Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+    Erebus.radiogenic_heating!(state, coords, cfg)
+    Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
+    interpolate_markers_to_grid!(
+        state,
+        coords,
+        cfg;
+        p2m_workspace=ws.p2m,
+        thread_buffers=ws.thread_buffers,
+        interp_arrays=ws.interp_arrays,
+        rock_sums=ws.rock_sums,
+    )
+    return state, coords, ws
+end
+
+"""
+Run time step `step` of `simulation_loop` (without replenishment, telescoping and output)
+on `state`. With `solve_only = true` the step stops after the thermal solve.
+"""
+function fs_step!(state, coords, cfg, ws, step; solve_only=false)
+    state.timestep = step
+    dt0 = state.dt
+    Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+    Erebus.radiogenic_heating!(state, coords, cfg)
+    Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
+    interpolate_markers_to_grid!(
+        state,
+        coords,
+        cfg;
+        p2m_workspace=ws.p2m,
+        thread_buffers=ws.thread_buffers,
+        interp_arrays=ws.interp_arrays,
+        rock_sums=ws.rock_sums,
+    )
+    Erebus.solve_gravity!(state, coords, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
+    Erebus.snapshot_step_start_inventories!(ws, state, cfg)
+    Erebus.update_step_start_pressures!(state)
+    res = Erebus.solve_thermomechanical_iterations!(
+        state, coords, cfg, ws; dt_step_initial=dt0
+    )
+    res.plastic_converged || error("plastic iterations did not converge")
+    solve_only && return res
+    Erebus.diffuse_and_update_markers!(state, coords, cfg, ws)
+    Erebus.vent_and_degas!(state, coords, cfg; Fm_step_start=ws.Fm_step_start)
+    Erebus.advect_markers!(
+        state, coords, cfg; XWSSUM=ws.interp_arrays[32], WTPSUM=ws.interp_arrays[33]
+    )
+    state.timesum += state.dt
+    res.dt_reduced_by_maxDT && (state.dt = res.dt_next)
+    return res
+end
+
+# Bilinear weights of a marker at (x, y) on the P, Vx or Vy nodes of `coords`.
+function fs_weights(coords, x, y, grid::Symbol)
+    c = coords
+    if grid === :p
+        return Erebus.fix_weights(
+            x, y, c.xp, c.yp, c.dx, c.dy, c.jmin_p, c.jmax_p, c.imin_p, c.imax_p
+        )
+    elseif grid === :vx
+        return Erebus.fix_weights(
+            x, y, c.xvx, c.yvx, c.dx, c.dy, c.jmin_vx, c.jmax_vx, c.imin_vx, c.imax_vx
+        )
+    end
+    return Erebus.fix_weights(
+        x, y, c.xvy, c.yvy, c.dx, c.dy, c.jmin_vy, c.jmax_vy, c.imin_vy, c.imax_vy
     )
 end
 
@@ -468,7 +546,9 @@ end
     end
 
     @testset "S3 rock-only node properties on the scatter paths" begin
-        cfg_fixed = fs_config(fs_case())
+        # Air 10 times as conductive as the rock grains, so that a face average over all
+        # markers differs from the rock-only value
+        cfg_fixed = fs_config(fs_case(; k_air=30.0))
         results = Dict{Symbol,Any}()
         for mode in (:tiled, :buffered)
             cfg = fs_config(
@@ -483,6 +563,7 @@ end
             )
             state, coords, ws, _, _ = init_simulation(cfg; output_path=mktempdir())
             Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+            Erebus.radiogenic_heating!(state, coords, cfg)
             interpolate_markers_to_grid!(
                 state,
                 coords,
@@ -503,64 +584,327 @@ end
         core = state.markers.core
         acc = state.accumulators
         Ny1, Nx1 = coords.Ny1, coords.Nx1
-        W = zeros(Ny1, Nx1)
-        Wr = zeros(Ny1, Nx1)
-        C = zeros(Ny1, Nx1)
-        E = zeros(Ny1, Nx1)
+        W, Wr, C, E, HRr, KPr = (zeros(Ny1, Nx1) for _ in 1:6)
+        KXr, WXr, KYr, WYr, WXa, WYa, KXa, KYa = (zeros(Ny1, Nx1) for _ in 1:8)
         for m in 1:length(state.markers)
-            i, j, w = Erebus.fix_weights(
-                core.xm[m],
-                core.ym[m],
-                coords.xp,
-                coords.yp,
-                coords.dx,
-                coords.dy,
-                1,
-                Nx1 - 1,
-                1,
-                Ny1 - 1,
-            )
+            x, y = core.xm[m], core.ym[m]
+            i, j, w = fs_weights(coords, x, y, :p)
             Erebus.interpolate_add_to_grid!(i, j, w, 1.0, W)
-            if core.tm[m] < 3
-                Erebus.interpolate_add_to_grid!(i, j, w, 1.0, Wr)
-                Erebus.interpolate_add_to_grid!(i, j, w, core.rhocptotalm[m], C)
-                Erebus.interpolate_add_to_grid!(
-                    i, j, w, core.rhocptotalm[m] * core.tkm[m], E
-                )
-            end
+            ix, jx, wx = fs_weights(coords, x, y, :vx)
+            Erebus.interpolate_add_to_grid!(ix, jx, wx, 1.0, WXa)
+            Erebus.interpolate_add_to_grid!(ix, jx, wx, core.ktotalm[m], KXa)
+            iy, jy, wy = fs_weights(coords, x, y, :vy)
+            Erebus.interpolate_add_to_grid!(iy, jy, wy, 1.0, WYa)
+            Erebus.interpolate_add_to_grid!(iy, jy, wy, core.ktotalm[m], KYa)
+            core.tm[m] < 3 || continue
+            k_m = core.ktotalm[m]
+            Erebus.interpolate_add_to_grid!(i, j, w, 1.0, Wr)
+            Erebus.interpolate_add_to_grid!(i, j, w, core.rhocptotalm[m], C)
+            Erebus.interpolate_add_to_grid!(i, j, w, core.rhocptotalm[m] * core.tkm[m], E)
+            Erebus.interpolate_add_to_grid!(i, j, w, core.hrtotalm[m], HRr)
+            Erebus.interpolate_add_to_grid!(i, j, w, k_m, KPr)
+            Erebus.interpolate_add_to_grid!(ix, jx, wx, k_m, KXr)
+            Erebus.interpolate_add_to_grid!(ix, jx, wx, 1.0, WXr)
+            Erebus.interpolate_add_to_grid!(iy, jy, wy, k_m, KYr)
+            Erebus.interpolate_add_to_grid!(iy, jy, wy, 1.0, WYr)
         end
+        fixed = g.fixed_tk
         n_mixed = 0
         n_bad = 0
+        hr_max = 0.0
         for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
-            g.fixed_tk[i, j] && continue
+            fixed[i, j] && continue
             (Wr[i, j] < W[i, j] * (1 - 1e-9)) || continue
             n_mixed += 1
             n_bad += !isapprox(g.RHOCP[i, j], C[i, j] / W[i, j]; rtol=1e-10)
             n_bad += !isapprox(g.tk1[i, j], E[i, j] / C[i, j]; rtol=1e-10)
+            # Rock heating over the weight of all markers, not of the rock markers
+            n_bad += !isapprox(g.HR[i, j], HRr[i, j] / W[i, j]; rtol=1e-10)
+            hr_max = max(hr_max, HRr[i, j] / W[i, j])
         end
-        @test 0 < n_mixed < count(.!g.fixed_tk)
+        @test 0 < n_mixed < count(.!fixed)
         @test n_bad == 0
+        @test 1.0e-9 < hr_max < 1.0e-3
         T_space = FS_PSV.T_SPACE
-        @test all(isapprox.(g.tk1[g.fixed_tk], T_space; atol=1e-9))
+        @test all(isapprox.(g.tk1[fixed], T_space; atol=1e-9))
+        # Faces: rock-only conductivity between free nodes, cut-cell value at R_p
+        acc = state.accumulators
+        xc, yc, R = acc.xcenter, acc.ycenter, acc.rplanet
+        k_node(i, j) = KPr[i, j] / Wr[i, j]
+        n_free_air = 0
+        n_cut = 0
+        n_bad_face = 0
+        k_mix_contrast = 0.0
+        faces = (
+            (g.KX, KXr, WXr, KXa, WXa, 0, 1, coords.dx),
+            (g.KY, KYr, WYr, KYa, WYa, 1, 0, coords.dy),
+        )
+        for (K, Kr, Wf, Ka, Wa, di, dj, h) in faces
+            for j in 2:(Nx1 - 1 - dj), i in 2:(Ny1 - 1 - di)
+                fa, fb = fixed[i, j], fixed[i + di, j + dj]
+                fa && fb && continue
+                if !fa && !fb
+                    Wf[i, j] > 0.0 || continue
+                    if Wf[i, j] < Wa[i, j] * (1 - 1e-9)
+                        n_free_air += 1
+                        k_rock = Kr[i, j] / Wf[i, j]
+                        k_mix_contrast = max(
+                            k_mix_contrast, abs(Ka[i, j] / Wa[i, j] - k_rock) / k_rock
+                        )
+                    end
+                    n_bad_face += !isapprox(K[i, j], Kr[i, j] / Wf[i, j]; rtol=1e-10)
+                    continue
+                end
+                # free node (iin, jin), fixed node (iout, jout) outside R_p
+                iin, jin = fa ? (i + di, j + dj) : (i, j)
+                iout, jout = fa ? (i, j) : (i + di, j + dj)
+                hypot(coords.xp[jout] - xc, coords.yp[iout] - yc) > R || continue
+                k_face = Wf[i, j] > 0.0 ? Kr[i, j] / Wf[i, j] : k_node(iin, jin)
+                # distance from the free node to the circle along the face line
+                x0, y0 = coords.xp[jin] - xc, coords.yp[iin] - yc
+                s = fa ? -1.0 : 1.0
+                d = if dj == 1
+                    s * (s * sqrt(R^2 - y0^2) - x0)
+                else
+                    s * (s * sqrt(R^2 - x0^2) - y0)
+                end
+                @assert 0.0 <= d <= h * (1 + 1e-12)
+                n_cut += 1
+                expected = k_face * h / max(d, 1.0e-3 * h)
+                n_bad_face += !isapprox(K[i, j], expected; rtol=1e-10)
+            end
+        end
+        @test 8 < n_cut < 4 * (Nx1 + Ny1)
+        @test 0 < n_free_air < 2 * count(.!fixed)
+        @test 0.1 < k_mix_contrast < 1.0e3
+        @test n_bad_face == 0
     end
 
-    @testset "S2/S6 short runs: fixed nodes hold, default unchanged" begin
-        base = fs_case(; Nx=17, n_steps=2)
+    @testset "S2 short run: fixed nodes hold, box edges copy their neighbours" begin
         st_fixed = mktempdir() do d
-            simulation_loop(fs_config(base); output_path=d)
+            simulation_loop(fs_config(fs_case(; Nx=17, n_steps=2)); output_path=d)
         end
         g = st_fixed.grids
         @test all(isapprox.(g.tk2[g.fixed_tk], FS_PSV.T_SPACE; atol=1e-9))
         @test all(isapprox.(g.DT0[g.fixed_tk], 0.0; atol=1e-9))
         @test all(isfinite, g.tk2)
-        st_def = mktempdir() do d
+        # The zero-flux edges copy the start temperature after the fixed override
+        tk1 = g.tk1
+        @test isapprox(tk1[1, 2:(end - 1)], tk1[2, 2:(end - 1)]; atol=0, rtol=0)
+        @test isapprox(tk1[end, 2:(end - 1)], tk1[end - 1, 2:(end - 1)]; atol=0, rtol=0)
+        @test isapprox(tk1[:, 1], tk1[:, 2]; atol=0, rtol=0)
+        @test isapprox(tk1[:, end], tk1[:, end - 1]; atol=0, rtol=0)
+    end
+
+    @testset "S6 default :sticky_air run equals main" begin
+        # Porous shell, Nx 17, 2 steps, 1 thread: sums and maxima of a run on main (d5b89b93).
+        # rtol 1e-10 allows round-off across platforms; a change of 1e-6 K in tk2 fails.
+        base = fs_case(; Nx=17, n_steps=2)
+        st = mktempdir() do d
             simulation_loop(base; output_path=d)
         end
+        g = st.grids
+        n = length(st.markers)
+        @test g.fixed_tk === nothing
+        @test n == 4096
+        ref = (
+            (g.tk2, 98515.51285663407, 339.6377430092821),
+            (g.DT, 2311.314418574831, 24.21882340227634),
+            (g.RHOCP, 5.528118079760592e12, 3.0000000000000023e10),
+            (g.KX, 68.29497476834788, 0.21078695916156773),
+        )
+        for (a, s_ref, m_ref) in ref
+            @test isapprox(sum(a), s_ref; rtol=1e-10)
+            @test isapprox(maximum(a), m_ref; rtol=1e-10)
+        end
+        @test isapprox(sum(st.markers.core.tkm[1:n]), 1.2635128084666603e6; rtol=1e-10)
         st_explicit = mktempdir() do d
             simulation_loop(fs_config(base; surface_temperature=:sticky_air); output_path=d)
         end
-        @test st_def.grids.fixed_tk === nothing
-        @test isequal(st_def.grids.tk2, st_explicit.grids.tk2)
-        @test isequal(st_def.markers.core.tkm, st_explicit.markers.core.tkm)
+        @test isequal(g.tk2, st_explicit.grids.tk2)
+        @test isequal(st.markers.core.tkm, st_explicit.markers.core.tkm)
+    end
+
+    @testset "F4 counts of the fixed-surface pass and the warning" begin
+        cfg = fs_config(fs_case())
+        state, coords, ws = fs_mapped_state(cfg)
+        acc = state.accumulators
+        core = state.markers.core
+        n = length(state.markers)
+        fixed = state.grids.fixed_tk
+        c0 = acc.fixed_surface_counts
+        @test c0.n_fixed == count(fixed)
+        @test 0 < c0.n_fixed < (coords.Nx1 - 2) * (coords.Ny1 - 2)
+        @test c0.n_norock == 0 && c0.n_norock_steps == 0
+        R0 = acc.rplanet
+        n_out(R) = count(
+            m ->
+                core.tm[m] < 3 &&
+                hypot(core.xm[m] - acc.xcenter, core.ym[m] - acc.ycenter) > R,
+            1:n,
+        )
+        @test c0.n_rock_out == n_out(R0)
+        fs_pass!() = Erebus.apply_fixed_surface_temperature!(
+            state, coords, cfg; rock_sums=ws.rock_sums
+        )
+        # A planet radius inside the rock: rock markers lie outside R_p
+        acc.rplanet = R0 - 0.3 * coords.dx
+        c1 = fs_pass!()
+        acc.rplanet = R0 - 0.6 * coords.dx
+        c2 = fs_pass!()
+        @test 0 < c1.n_rock_out < c2.n_rock_out < n
+        @test c2.n_rock_out == n_out(acc.rplanet)
+        @test c1.n_norock == 0 && c2.n_norock == 0
+        # A planet radius 2 cells beyond the rock: free nodes without rock become fixed
+        acc.rplanet = R0 + 2.0 * coords.dx
+        geo_mask = zeros(Bool, size(fixed))
+        n_geo = Erebus.compute_fixed_surface_mask!(
+            geo_mask, coords; xcenter=acc.xcenter, ycenter=acc.ycenter, rplanet=acc.rplanet
+        )
+        c3 = @test_logs (:warn, r"no rock marker") match_mode = :any fs_pass!()
+        @test 0 < c3.n_norock < c3.n_fixed
+        @test c3.n_fixed == count(fixed) == n_geo + c3.n_norock
+        @test c3.n_rock_out == 0
+        @test acc.fixed_surface_counts == c3
+        # The warning comes once per run; the counts still update
+        c4 = @test_logs min_level = Logging.Warn fs_pass!()
+        @test c4.n_norock == c3.n_norock
+        @test c4.n_norock_steps == 2
+        acc.rplanet = R0
+        c5 = fs_pass!()
+        @test c5.n_norock == 0 && c5.n_fixed == c0.n_fixed
+        @test c5.n_norock_steps == 2
+        # The default mode does nothing and returns nothing
+        cfg_def = fs_config(cfg; surface_temperature=:sticky_air)
+        @test Erebus.apply_fixed_surface_temperature!(state, coords, cfg_def) === nothing
+        @test acc.fixed_surface_counts == c5
+    end
+
+    @testset "F5 the fixed-surface pass allocates nothing per step" begin
+        cfg = fs_config(fs_case())
+        state, coords, ws = fs_mapped_state(cfg)
+        fs_alloc(st, co, cf, sums) =
+            @allocated Erebus.apply_fixed_surface_temperature!(st, co, cf; rock_sums=sums)
+        fs_alloc(state, coords, cfg, ws.rock_sums)
+        bytes = fs_alloc(state, coords, cfg, ws.rock_sums)
+        println("F5 Nx=17 marknum=$(length(state.markers)) allocated=$bytes bytes")
+        @test bytes <= FS_ALLOC_BOUND
+        # The sums are reset each call: the weights of all markers add up to marknum
+        @test isapprox(sum(ws.rock_sums.WP), length(state.markers); rtol=1e-12)
+        @test sum(ws.rock_sums.WPr) < sum(ws.rock_sums.WP)
+        # The limit sets no capacity at fixed nodes without allocating for the mask
+        g = state.grids
+        Ny1, Nx1 = size(g.DT)
+        core = state.markers.core
+        n = length(state.markers)
+        DTz = zeros(Ny1, Nx1)
+        DEF = zeros(Ny1, Nx1)
+        CAP = zeros(Ny1, Nx1)
+        st = Erebus.limit_marker_temperature_increment!(
+            core.xm,
+            core.ym,
+            core.tm,
+            copy(core.tkm),
+            core.rhocptotalm,
+            DTz,
+            g.tk1,
+            DEF,
+            CAP,
+            n;
+            coords=coords,
+            fixed=g.fixed_tk,
+        )
+        @test st.n_limited == 0
+        @test all(isapprox.(CAP[g.fixed_tk], 0.0; atol=0))
+    end
+
+    @testset "D3 one full step: rock marker heat equals grid heat plus boundary terms" begin
+        cfg = fs_config(fs_case(; Nx=17, n_steps=2))
+        @test cfg.solver.hydromech_solver === :direct
+        @test isapprox(cfg.solver.dsubgridt, 1.0; rtol=1e-12)
+        state, coords, ws, tel, _ = init_simulation(cfg; output_path=mktempdir())
+        tel isa IO && close(tel)
+        fs_step!(state, coords, cfg, ws, 1)
+        fs_step!(state, coords, cfg, ws, 2; solve_only=true)
+        g = state.grids
+        core = state.markers.core
+        n = length(state.markers)
+        fixed = g.fixed_tk
+        free = .!fixed
+        rock = [core.tm[m] < 3 for m in 1:n]
+        tkm0 = core.tkm[1:n]
+        rhocp = core.rhocptotalm[1:n]
+        DT_solve = copy(g.DT)
+        # Heat capacity of the rock markers at the P nodes, 2-D bilinear weights
+        RC = zeros(size(DT_solve))
+        for m in 1:n
+            rock[m] || continue
+            i, j, w = fs_weights(coords, core.xm[m], core.ym[m], :p)
+            Erebus.interpolate_add_to_grid!(i, j, w, rhocp[m], RC)
+        end
+        # Replay of the relaxation and the limit on copies, for the boundary terms
+        tkm_r = core.tkm[1:n]
+        DT_r = copy(DT_solve)
+        TKS = zeros(size(DT_r))
+        RCS = zeros(size(DT_r))
+        Erebus.apply_subgrid_temperature_diffusion!(
+            core.xm,
+            core.ym,
+            core.tm,
+            tkm_r,
+            core.phim,
+            g.tk1,
+            DT_r,
+            TKS,
+            RCS,
+            state.dt,
+            n,
+            Erebus.marker_property_mode;
+            coords=coords,
+            dsubgridt=cfg.solver.dsubgridt,
+            phi_dry=Erebus.dry_porosity(state.markers),
+            rhocptotalm=core.rhocptotalm,
+            ktotalm=core.ktotalm,
+            fixed=fixed,
+        )
+        subgrid_share = sum(TKS[fixed])
+        subgrid_abs = sum(abs, TKS)
+        lim = Erebus.limit_relaxed_marker_temperatures!(
+            core.xm,
+            core.ym,
+            core.tm,
+            tkm_r,
+            core.rhocptotalm,
+            DT_r,
+            DT_solve,
+            g.tk1,
+            g.tk2,
+            TKS,
+            RCS,
+            n;
+            coords=coords,
+            tkm_floor=tkm0,
+            w3d=cfg.geometry.spherical_metric ? core.w3d_m : nothing,
+            fixed=fixed,
+        )
+        # The step itself
+        Erebus.diffuse_and_update_markers!(state, coords, cfg, ws)
+        Erebus.vent_and_degas!(state, coords, cfg; Fm_step_start=ws.Fm_step_start)
+        @test isapprox(g.DT, DT_r; atol=0, rtol=0)
+        marker_heat = sum(rhocp[m] * (core.tkm[m] - tkm0[m]) for m in 1:n if rock[m])
+        grid_heat = sum(DT_solve[free] .* RC[free])
+        scale = sum(abs, DT_solve .* RC) + subgrid_abs
+        # Heat that the limit rejects and cannot hand on stays with the markers (+heat_lost);
+        # heat_lost carries w3d under the spherical metric and is 0 when no marker is limited
+        residual = marker_heat - (grid_heat + subgrid_share + lim.heat_lost)
+        println(
+            "D3 step 2: marker heat $marker_heat, grid heat $grid_heat, subgrid share " *
+            "$subgrid_share, heat_lost $(lim.heat_lost), n_limited $(lim.n_limited), " *
+            "residual $residual, scale $scale, residual/scale $(residual / scale)",
+        )
+        @test abs(subgrid_share) > 1e-9 * scale
+        # No marker is limited in this step; a limited step mixes w3d into heat_lost
+        @test lim.n_limited == 0
+        @test abs(residual) <= 1e-12 * scale
     end
 end

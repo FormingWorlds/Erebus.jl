@@ -72,9 +72,13 @@ function _preupdate_marker_redox!(
 end
 
 """
-    interpolate_markers_to_grid!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig; p2m_workspace=nothing, thread_buffers=nothing, interp_arrays=nothing)::Nothing
+    interpolate_markers_to_grid!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig; p2m_workspace=nothing, thread_buffers=nothing, interp_arrays=nothing, rock_sums=nothing)::Nothing
 
 Interpolate marker properties to staggered Eulerian mesh and normalize nodal properties.
+
+`rock_sums` (from `allocate_rock_thermal_sums`) holds the rock-marker sums of
+`apply_fixed_surface_temperature!` under `thermodynamics.surface_temperature = :fixed`;
+with `nothing` that pass allocates them.
 
 # Mutates:
 - `state.grids.ETA`
@@ -116,6 +120,7 @@ function interpolate_markers_to_grid!(
     p2m_workspace=nothing,
     thread_buffers=nothing,
     interp_arrays=nothing,
+    rock_sums=nothing,
 )::Nothing
     # Empty marker set contract: return immediately with no mutations
     length(state.markers) == 0 && return nothing
@@ -843,12 +848,43 @@ function interpolate_markers_to_grid!(
         S330=cfg.geometry.spherical_flow ? grids.S330 : nothing,
     )
 
-    # Boundary conditions
+    # Boundary conditions: the box edges copy tk1 after the fixed-surface override
+    apply_fixed_surface_temperature!(state, coords, cfg; rock_sums=rock_sums)
     apply_insulating_boundary_conditions!(grids.tk1)
-    apply_fixed_surface_temperature!(state, coords, cfg)
     grids.tk2 .= grids.tk1
 
     return nothing
+end
+
+"""
+Allocate the 10 P grid arrays of `scatter_rock_thermal_sums!`.
+
+$(SIGNATURES)
+
+# Arguments
+- `coords`: grid coordinates
+
+# Returns
+- `NamedTuple` of zero `Ny1` x `Nx1` arrays `WP`, `WPr`, `C`, `E`, `HRr`, `KPr`, `KXr`,
+  `WXr`, `KYr`, `WYr`
+
+# Throws
+- nothing
+"""
+function allocate_rock_thermal_sums(coords::GridCoordinates)
+    sz = (coords.Ny1, coords.Nx1)
+    return (;
+        WP=zeros(sz),
+        WPr=zeros(sz),
+        C=zeros(sz),
+        E=zeros(sz),
+        HRr=zeros(sz),
+        KPr=zeros(sz),
+        KXr=zeros(sz),
+        WXr=zeros(sz),
+        KYr=zeros(sz),
+        WYr=zeros(sz),
+    )
 end
 
 """
@@ -861,24 +897,28 @@ The weights are the bilinear weights of `marker_to_p_nodes!`, `marker_to_vx_node
 `marker_to_vy_nodes!`, so the sums do not depend on the scatter path.
 
 # Arguments
+- `sums`: result of `allocate_rock_thermal_sums`, reset and filled in place: `WP` (all
+  weights), `WPr` (rock weights), `C` (rock heat capacity sum [J/(m^3 K)]), `E` (rock
+  `rhocp T` sum [J/m^3]), `HRr` (rock heating sum [W/m^3]), `KPr` (rock conductivity sum
+  at P nodes), `KXr`, `WXr`, `KYr`, `WYr` (rock conductivity and weight sums at Vx and Vy
+  nodes)
 - `core`: marker core group (`xm`, `ym`, `tm`, `rhocptotalm`, `tkm_rhocptotalm`,
   `hrtotalm`, `ktotalm` of the step)
 - `marknum`: number of markers in use
 - `coords`: grid coordinates
 
 # Returns
-- `NamedTuple` of P grid arrays: `WP` (all weights), `WPr` (rock weights), `C`
-  (rock heat capacity sum [J/(m^3 K)]), `E` (rock `rhocp T` sum [J/m^3]), `HRr` (rock
-  heating sum [W/m^3]), `KPr` (rock conductivity sum at P nodes), `KXr`, `WXr`, `KYr`,
-  `WYr` (rock conductivity and weight sums at Vx and Vy nodes)
+- `sums`
 
 # Throws
+- `ArgumentError`: if an array of `sums` does not have the size of the P grid
 - `DomainError`: if a marker position is not finite
 """
-function scatter_rock_thermal_sums(core, marknum::Int, coords::GridCoordinates)
-    sz = (coords.Ny1, coords.Nx1)
-    WP, WPr, C, E, HRr, KPr = (zeros(sz) for _ in 1:6)
-    KXr, WXr, KYr, WYr = (zeros(sz) for _ in 1:4)
+function scatter_rock_thermal_sums!(sums, core, marknum::Int, coords::GridCoordinates)
+    all(a -> size(a) == (coords.Ny1, coords.Nx1), values(sums)) ||
+        throw(ArgumentError("the rock sums must have the size of the P grid"))
+    foreach(a -> fill!(a, 0.0), values(sums))
+    (; WP, WPr, C, E, HRr, KPr, KXr, WXr, KYr, WYr) = sums
     @unpack_coords coords xp yp xvx yvx xvy yvy dx dy
     @unpack_coords coords jmin_p jmax_p imin_p imax_p jmin_vx jmax_vx imin_vx imax_vx
     @unpack_coords coords jmin_vy jmax_vy imin_vy imax_vy
@@ -934,7 +974,7 @@ function scatter_rock_thermal_sums(core, marknum::Int, coords::GridCoordinates)
         interpolate_add_to_grid!(i, j, w, k_m, KYr)
         interpolate_add_to_grid!(i, j, w, 1.0, WYr)
     end
-    return (; WP, WPr, C, E, HRr, KPr, KXr, WXr, KYr, WYr)
+    return sums
 end
 
 """
@@ -955,7 +995,7 @@ face, or the rock conductivity of the free node when the face has no rock. Faces
   [W/m^3], changed in place
 - `KX`, `KY`: conductivity at Vx and Vy nodes [W/(m K)], changed in place
 - `fixed`: Bool mask of the P grid, changed in place for nodes without rock
-- `sums`: result of `scatter_rock_thermal_sums`
+- `sums`: rock sums filled by `scatter_rock_thermal_sums!`
 - `coords`: grid coordinates
 - `xcenter`, `ycenter`, `rplanet`: planet centre and radius [m]
 
@@ -1018,22 +1058,31 @@ Builds `state.grids.fixed_tk` from the planet centre and radius of `state.accumu
 gives the free nodes and faces their rock-only properties
 (`apply_rock_only_thermal_properties!`), places the fixed value at the planet radius
 (`apply_cut_cell_conductance!`) and sets `tk1` of the fixed nodes to the disk temperature
-of the step. Does nothing with `:sticky_air`.
+of the step. The counts go to `state.accumulators.fixed_surface_counts`. The first pass of
+a run that makes free nodes without rock fixed logs a warning. Does nothing with
+`:sticky_air`.
 
 # Arguments
 - `state`: simulation state after the scatter
 - `coords`: grid coordinates
 - `cfg`: simulation configuration
+- `rock_sums`: arrays from `allocate_rock_thermal_sums`, reused in place, or `nothing` to
+  allocate them
 
 # Returns
-- `nothing`
+- `nothing` with `:sticky_air`; else a `NamedTuple` with `n_fixed` (fixed P nodes),
+  `n_norock` (free nodes without rock made fixed), `n_rock_out` (rock markers outside
+  `rplanet`) and `n_norock_steps` (passes of the run with `n_norock > 0`)
 
 # Throws
 - `ArgumentError`: if the state has no `fixed_tk` array, or from
-  `apply_rock_only_thermal_properties!`
+  `scatter_rock_thermal_sums!` and `apply_rock_only_thermal_properties!`
 """
 function apply_fixed_surface_temperature!(
-    state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig
+    state::SimulationState,
+    coords::GridCoordinates,
+    cfg::SimulationConfig;
+    rock_sums=nothing,
 )
     cfg.thermodynamics.surface_temperature === :fixed || return nothing
     g = state.grids
@@ -1047,20 +1096,35 @@ function apply_fixed_surface_temperature!(
     compute_fixed_surface_mask!(fixed, coords; geo...)
     marknum = length(state.markers)
     core = state.markers.core
-    sums = scatter_rock_thermal_sums(core, marknum, coords)
+    sums = rock_sums === nothing ? allocate_rock_thermal_sums(coords) : rock_sums
+    scatter_rock_thermal_sums!(sums, core, marknum, coords)
     n_norock = apply_rock_only_thermal_properties!(
         g.RHOCP, g.tk1, g.HR, g.KX, g.KY, fixed, sums, coords; geo...
     )
     apply_cut_cell_conductance!(g.KX, g.KY, fixed, coords; geo...)
-    g.tk1[fixed] .= T_fixed
+    n_fixed = 0
+    @inbounds for k in eachindex(fixed)
+        fixed[k] || continue
+        g.tk1[k] = T_fixed
+        n_fixed += 1
+    end
     n_rock_out = count(
         m ->
             core.tm[m] < 3 &&
             hypot(core.xm[m] - geo.xcenter, core.ym[m] - geo.ycenter) > geo.rplanet,
         1:marknum,
     )
-    @debug "fixed surface temperature" T_fixed n_fixed = count(fixed) n_norock n_rock_out
-    return nothing
+    n_steps_before = acc.fixed_surface_counts.n_norock_steps
+    if n_norock > 0 && n_steps_before == 0
+        @warn "fixed surface temperature: $n_norock free P nodes within 1.5 cells of " *
+            "rplanet have no rock marker and are held at the disk temperature"
+    end
+    counts = (;
+        n_fixed, n_norock, n_rock_out, n_norock_steps=n_steps_before + (n_norock > 0)
+    )
+    acc.fixed_surface_counts = counts
+    @debug "fixed surface temperature" T_fixed counts
+    return counts
 end
 
 """

@@ -205,6 +205,7 @@ function create_mock_simulation_state(;
         species_tracking ? Dict{Symbol,Float64}() : nothing,
         nothing,
         nothing,
+        Erebus.zero_fixed_surface_counts(),
     )
 
     state = SimulationState(

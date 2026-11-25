@@ -412,6 +412,7 @@ function setup_simulation_markers_and_state(
             M_escaped_species,
             nothing,
             nothing,
+            zero_fixed_surface_counts(),
         )
 
         state = SimulationState(
@@ -544,6 +545,11 @@ function setup_simulation_workspaces(
         -1,
         PlasticCycleTracker(),
         AndersonHistory(0, 0),
+        if cfg.thermodynamics.surface_temperature === :fixed
+            allocate_rock_thermal_sums(coords)
+        else
+            nothing
+        end,
     )
 end
 

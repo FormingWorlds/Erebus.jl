@@ -297,6 +297,7 @@ function simulation_loop(
                         p2m_workspace=ws.p2m,
                         thread_buffers=ws.thread_buffers,
                         interp_arrays=ws.interp_arrays,
+                        rock_sums=ws.rock_sums,
                     )
                     solve_gravity!(
                         state, coords_ref[], cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP

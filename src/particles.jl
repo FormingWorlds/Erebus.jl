@@ -4899,7 +4899,11 @@ function limit_marker_temperature_increment!(
                 interpolate_add_to_grid!(i, j, weights, marker_heat(m), CAPACITY)
             end
         end
-        fixed === nothing || (CAPACITY[fixed] .= 0.0)
+        if fixed !== nothing
+            @inbounds for k in eachindex(fixed)
+                fixed[k] && (CAPACITY[k] = 0.0)
+            end
+        end
         n_limited == 0 && return (; n_limited, heat_rejected, heat_lost)
         any_limited || break
         @inbounds for j in axes(DEFICIT, 2), i in axes(DEFICIT, 1)

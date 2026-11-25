@@ -1241,6 +1241,7 @@ function load_simulation_state(
                 get(data, "M_escaped_species", nothing),
                 get(data, "core_budgets", nothing),
                 get(data, "regional_mineral_modes", nothing),
+                zero_fixed_surface_counts(),
             )
         end
 
