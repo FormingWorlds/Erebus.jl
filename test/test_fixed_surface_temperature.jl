@@ -824,8 +824,8 @@ end
 
     @testset "S6 default :sticky_air run equals main" begin
         # Porous shell, Nx 17, 2 steps, 1 thread: sums and maxima of the reference run. rtol
-        # 1e-10 fails a change of sum(tk2) by 1e-5 K (1e-6 K at every node) or of max(tk2) by
-        # 4e-8 K; a change of 1e-6 K at a single node can pass.
+        # 1e-10 fails a change of sum(tk2) by 1e-5 K (for example 1e-6 K at every node) or
+        # of max(tk2) by 4e-8 K; a change of 1e-6 K at a single node can pass.
         base = fs_case(; Nx=17, n_steps=2)
         st = mktempdir() do d
             simulation_loop(base; output_path=d)
@@ -1066,7 +1066,8 @@ end
     end
 
     @testset "S9 one hot step of solve_thermal_energy!: metric term from the uncut faces" begin
-        cfg = fs_config(fs_case(; Nx=17, n_steps=2))
+        # Air k 3000: the faces of all markers then differ from the rock-only faces
+        cfg = fs_config(fs_case(; Nx=17, n_steps=2, k_air=3000.0))
         state, coords, ws, tel, _ = init_simulation(cfg; output_path=mktempdir())
         tel isa IO && close(tel)
         fs_step!(state, coords, cfg, ws, 1; solve_only=true)
