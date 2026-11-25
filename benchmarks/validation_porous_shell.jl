@@ -519,7 +519,7 @@ function radial_bin_medians(
 end
 
 """
-    thermal_step_energy_residual(g, dt, dx, dy)
+    thermal_step_energy_residual(g, dt, dx, dy; fixed=nothing)
 
 Return the relative residual of the energy identity of the last thermal step held in the
 grid fields `g`. Over the interior P nodes the stored heat is
@@ -531,16 +531,23 @@ the right-hand side of `assemble_thermal_lse!`. The boundary nodes copy their ne
 `RHOCP` changes the stored heat of a node by more than the whole planet, so a scale from
 the sums alone would cancel.
 
+With a `fixed` mask (`thermodynamics.surface_temperature = :fixed`) the sums run over the
+free nodes only, and the heat that enters the free nodes through the faces to fixed nodes,
+`dt sum(K (tk2_fixed - tk2) / h^2) dx dy` with the face conductivity `KX` or `KY` of
+`g`, counts as a source. Its absolute value enters the scale.
+
 Parameters
 ----------
 g : Grids or NamedTuple
     Grid fields after a thermal solve: `tk1`, `tk2` [K], `RHOCP` [J/(m^3 K)], `HR`, `HA`,
     `HS`, `DHP`, `Q_metric` (or `nothing`), `Q_lat_grid`, `Q_seg_grid`, `Q_fluid_grid`
-    [W/m^3].
+    [W/m^3]; with `fixed` also `KX`, `KY` [W/(m K)].
 dt : Float64
     Time step of the thermal solve [s].
 dx, dy : Float64
     Grid spacing [m].
+fixed : Union{Nothing,AbstractMatrix{Bool}}
+    Fixed-temperature P nodes, or `nothing` for all interior nodes.
 
 Returns
 -------
@@ -552,10 +559,14 @@ Raises
 ArgumentError
     If the scale is not positive and finite (no temperature change and no heat).
 """
-function thermal_step_energy_residual(g, dt::Float64, dx::Float64, dy::Float64)
+function thermal_step_energy_residual(
+    g, dt::Float64, dx::Float64, dy::Float64; fixed=nothing
+)
     Ny1, Nx1 = size(g.tk1)
     stored = source = stored_abs = source_abs = 0.0
+    isfixed(i, j) = fixed !== nothing && fixed[i, j]
     for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+        isfixed(i, j) && continue
         de = g.RHOCP[i, j] * (g.tk2[i, j] - g.tk1[i, j])
         q =
             g.HR[i, j] +
@@ -566,6 +577,13 @@ function thermal_step_energy_residual(g, dt::Float64, dx::Float64, dy::Float64)
             g.Q_lat_grid[i, j] +
             g.Q_seg_grid[i, j] +
             g.Q_fluid_grid[i, j]
+        if fixed !== nothing
+            T = g.tk2[i, j]
+            isfixed(i, j - 1) && (q += g.KX[i, j - 1] * (g.tk2[i, j - 1] - T) / dx^2)
+            isfixed(i, j + 1) && (q += g.KX[i, j] * (g.tk2[i, j + 1] - T) / dx^2)
+            isfixed(i - 1, j) && (q += g.KY[i - 1, j] * (g.tk2[i - 1, j] - T) / dy^2)
+            isfixed(i + 1, j) && (q += g.KY[i, j] * (g.tk2[i + 1, j] - T) / dy^2)
+        end
         stored += de
         source += q
         stored_abs += abs(de)

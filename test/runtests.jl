@@ -26,6 +26,7 @@ unit_tests = [
     "test_physics.jl",
     "test_particles.jl",
     "test_subgrid_temperature.jl",
+    "test_fixed_surface_temperature.jl",
     "test_fluid_advection_heat.jl",
     "test_numerics.jl",
     "test_simulation.jl",

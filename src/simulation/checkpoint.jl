@@ -1052,6 +1052,30 @@ function _missing_s33_array(path, name, like, cfg::SimulationConfig)
 end
 
 """
+Return the fixed-temperature mask of a restored state.
+
+$(SIGNATURES)
+
+The interpolation step rebuilds the mask each step, so the restored mask is a zero array
+with `thermodynamics.surface_temperature = :fixed` and `nothing` otherwise, whatever the
+file holds.
+
+# Arguments
+- `cfg`: configuration of the restored run
+- `data`: checkpoint dictionary; its `"tk1"` entry gives the P grid size
+
+# Returns
+- `Union{Nothing,Matrix{Bool}}`
+
+# Throws
+- `KeyError`: if `data` has no `"tk1"` entry and the mask is needed
+"""
+function _restored_fixed_tk(cfg::SimulationConfig, data)
+    cfg.thermodynamics.surface_temperature === :fixed || return nothing
+    return zeros(Bool, size(data["tk1"]))
+end
+
+"""
     load_simulation_state(path::AbstractString; force_restart_config::Bool=false, current_cfg::Union{Nothing,SimulationConfig}=nothing)
 
 Load simulation state, coordinates, and saved configuration from a schema version 2 checkpoint archive.
@@ -1157,7 +1181,9 @@ function load_simulation_state(
     grid_vals = Any[]
     for fn in fieldnames(GridArrays)
         sfn = string(fn)
-        if !haskey(data, sfn)
+        if fn === :fixed_tk
+            push!(grid_vals, _restored_fixed_tk(effective_cfg, data))
+        elseif !haskey(data, sfn)
             if fn === :Q_metric
                 push!(grid_vals, nothing)
             elseif fn in (:S33, :S330, :DS33)

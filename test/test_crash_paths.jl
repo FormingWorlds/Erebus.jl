@@ -204,7 +204,7 @@ using ArgParse
             )
             g_args = Any[]
             for fn in fieldnames(GridArrays)
-                if fn === :Q_metric
+                if fn === :Q_metric || fn === :fixed_tk
                     push!(g_args, nothing)
                 elseif fn in basic
                     push!(

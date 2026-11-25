@@ -10,7 +10,10 @@ end
 Base.showerror(io::IO, e::CheckpointError) = print(io, "CheckpointError: ", e.msg)
 
 """
-Unified container for all 84 staggered Eulerian mesh arrays.
+Unified container for all 85 staggered Eulerian mesh arrays.
+
+`fixed_tk` marks the P nodes with a fixed temperature under
+`thermodynamics.surface_temperature = :fixed` and is `nothing` otherwise.
 """
 struct GridArrays
     ETA::Matrix{Float64}
@@ -97,6 +100,7 @@ struct GridArrays
     Q_seg_grid::Matrix{Float64}
     Q_fluid_grid::Matrix{Float64}
     Q_metric::Union{Nothing,Matrix{Float64}}
+    fixed_tk::Union{Nothing,Matrix{Bool}}
 end
 
 Base.keys(::GridArrays) = fieldnames(GridArrays)
@@ -371,7 +375,8 @@ function snapshot_step_state!(
     ws::SimulationWorkspaces,
 ) where {G}
     if size(snap.grids.pr) != size(state.grids.pr) ||
-        (snap.grids.Q_metric === nothing) != (state.grids.Q_metric === nothing)
+        (snap.grids.Q_metric === nothing) != (state.grids.Q_metric === nothing) ||
+        (snap.grids.fixed_tk === nothing) != (state.grids.fixed_tk === nothing)
         snap.grids = copy(state.grids)
     else
         copy_grid_arrays!(snap.grids, state.grids)

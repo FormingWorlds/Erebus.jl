@@ -346,6 +346,7 @@ function solve_thermal_energy!(
         fill!(g.Q_fluid_grid, 0.0)
     end
 
+    fixed = cfg.thermodynamics.surface_temperature === :fixed ? g.fixed_tk : nothing
     LT = assemble_thermal_lse!(
         g.tk1,
         g.RHOCP,
@@ -364,10 +365,13 @@ function solve_thermal_energy!(
         Q_seg=Q_seg_val,
         Q_fluid=g.Q_fluid_grid,
         workspace=ws.thermal,
+        fixed=fixed,
     )
 
     if cfg.solver.hydromech_solver == :matrix_free
-        op_thermal = MatrixFreeThermalOperator(g.RHOCP, g.KX, g.KY, state.dt; coords=coords)
+        op_thermal = MatrixFreeThermalOperator(
+            g.RHOCP, g.KX, g.KY, state.dt; coords=coords, fixed=fixed
+        )
         _, stats_t = solve_thermal_iterative!(
             op_thermal,
             ws.RT,
@@ -402,6 +406,11 @@ function solve_thermal_energy!(
     end
     g.tk2 .= reshape(ws.ST, coords.Ny1, coords.Nx1)
     @. g.DT = g.tk2 - g.tk1
+    if fixed !== nothing
+        # The fixed nodes hold their value exactly, whatever the solver tolerance.
+        @. g.tk2 = ifelse(fixed, g.tk1, g.tk2)
+        @. g.DT = ifelse(fixed, 0.0, g.DT)
+    end
     maxDTcurrent = maximum(abs, g.DT)
 
     dt_next = finalize_thermochemical_iteration_pass(

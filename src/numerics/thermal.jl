@@ -19,6 +19,9 @@ $(SIGNATURES)
     - dt: current time step length
     - coords: grid coordinates
     - LT: optional ExtendableSparseMatrix buffer to reuse
+    - fixed: optional Bool matrix of the P grid; an interior node marked `true` gets the
+      row `T = tk1` (fixed temperature, see `compute_fixed_surface_mask!`); the box-edge
+      rows do not change
 
 # Returns
 
@@ -42,9 +45,12 @@ function assemble_thermal_lse!(
     Q_seg=nothing,
     Q_fluid=nothing,
     workspace=nothing,
+    fixed=nothing,
 )
     Ny1, Nx1 = size(tk1)
     @unpack_coords coords dx dy
+    (fixed === nothing || size(fixed) == (Ny1, Nx1)) ||
+        throw(ArgumentError("fixed must have the size of the P grid"))
 
     # fresh or reusable LHS coefficient matrix
     LT_target =
@@ -96,6 +102,10 @@ function assemble_thermal_lse!(
                 if i==Ny1 && 1<j<Nx1
                     updateindex!(LT, +, -1.0, gk, gk-1)
                 end
+            elseif fixed !== nothing && fixed[i, j]
+                # fixed surface node: T = tk1 (Dirichlet)
+                updateindex!(LT, +, 1.0, gk, gk)
+                RT[gk] = tk1[i, j]
             else
                 # internal points: 2D thermal equation (conservative formulation)
                 # extract thermal conductivities
@@ -138,6 +148,132 @@ function assemble_thermal_lse!(
     _finalize_assembled_lse!(LT, workspace, Ny1, Nx1)
     return LT
 end # function assemble_thermal_lse!
+
+"""
+    compute_fixed_surface_mask!(fixed, coords; xcenter, ycenter, rplanet)
+
+Mark the interior P nodes outside the planet, where the temperature is fixed.
+
+$(SIGNATURES)
+
+A node is fixed when its distance to the centre exceeds `rplanet`. The box-edge nodes keep
+their zero-flux rows and are never fixed.
+
+# Arguments
+- `fixed`: Bool matrix of the P grid, overwritten
+- `coords`: grid coordinates
+- `xcenter`, `ycenter`: planet centre [m]
+- `rplanet`: planet radius [m]
+
+# Returns
+- `Int`: the number of fixed nodes
+
+# Throws
+- `ArgumentError`: if `fixed` does not have the size of the P grid
+- `DomainError`: if `rplanet` is not positive and finite, or the centre is not finite
+"""
+function compute_fixed_surface_mask!(
+    fixed::AbstractMatrix{Bool},
+    coords::GridCoordinates;
+    xcenter::Real,
+    ycenter::Real,
+    rplanet::Real,
+)
+    size(fixed) == (coords.Ny1, coords.Nx1) ||
+        throw(ArgumentError("fixed must have the size of the P grid"))
+    (isfinite(rplanet) && rplanet > 0.0) ||
+        throw(DomainError(rplanet, "rplanet must be positive and finite"))
+    (isfinite(xcenter) && isfinite(ycenter)) ||
+        throw(DomainError((xcenter, ycenter), "the planet centre must be finite"))
+    fill!(fixed, false)
+    r2max = Float64(rplanet)^2
+    n = 0
+    @inbounds for j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny1 - 1)
+        r2 = (coords.xp[j] - xcenter)^2 + (coords.yp[i] - ycenter)^2
+        if r2 > r2max
+            fixed[i, j] = true
+            n += 1
+        end
+    end
+    return n
+end
+
+# Distance [m] from the inside point (a, b) along +s to the circle a^2 + b^2 = R^2,
+# where a is the coordinate along the face line and b the one across it.
+@inline function _distance_to_circle(a, b, R, s)
+    return sqrt(max(R^2 - b^2, 0.0)) - s * a
+end
+
+"""
+    apply_cut_cell_conductance!(KX, KY, fixed, coords; xcenter, ycenter, rplanet,
+                                d_floor=1.0e-3)
+
+Place the fixed temperature at the planet radius on the faces between a free node and a
+fixed node outside the planet.
+
+$(SIGNATURES)
+
+Such a face gets `K dx / d` (or `K dy / d`), where `K` is its conductivity on entry and
+`d` the distance from the free node to the circle `r = rplanet` along the face line, at
+least `d_floor dx`. The flux of the face is then `K (T_fixed - T) / d`, so the fixed value
+acts at `rplanet` and not at the fixed node. A fixed node inside the planet keeps the face
+as it is (distance `dx`). Other faces do not change.
+
+# Arguments
+- `KX`, `KY`: conductivity at Vx and Vy nodes [W/(m K)], changed in place
+- `fixed`: Bool mask of the P grid from `compute_fixed_surface_mask!`
+- `coords`: grid coordinates
+- `xcenter`, `ycenter`: planet centre [m]
+- `rplanet`: planet radius [m]
+- `d_floor`: smallest distance in cells [-]
+
+# Returns
+- `Int`: the number of faces changed
+
+# Throws
+- `ArgumentError`: if an array does not have the size of the P grid
+- `DomainError`: if `d_floor` is not in (0, 1]
+"""
+function apply_cut_cell_conductance!(
+    KX::AbstractMatrix{Float64},
+    KY::AbstractMatrix{Float64},
+    fixed::AbstractMatrix{Bool},
+    coords::GridCoordinates;
+    xcenter::Real,
+    ycenter::Real,
+    rplanet::Real,
+    d_floor::Real=1.0e-3,
+)
+    p_size = (coords.Ny1, coords.Nx1)
+    all(a -> size(a) == p_size, (KX, KY, fixed)) ||
+        throw(ArgumentError("KX, KY and fixed must have the size of the P grid"))
+    (isfinite(d_floor) && 0.0 < d_floor <= 1.0) ||
+        throw(DomainError(d_floor, "d_floor must be in (0, 1]"))
+    R = Float64(rplanet)
+    outside(i, j) = hypot(coords.xp[j] - xcenter, coords.yp[i] - ycenter) > R
+    n = 0
+    @inbounds for j in 2:(coords.Nx1 - 2), i in 2:(coords.Ny1 - 1)
+        fixed[i, j] == fixed[i, j + 1] && continue
+        jin, s = fixed[i, j] ? (j + 1, -1.0) : (j, 1.0)
+        outside(i, fixed[i, j] ? j : j + 1) || continue
+        a = coords.xp[jin] - xcenter
+        b = coords.yp[i] - ycenter
+        d = max(_distance_to_circle(a, b, R, s), d_floor * coords.dx)
+        KX[i, j] *= min(coords.dx / d, inv(d_floor))
+        n += 1
+    end
+    @inbounds for j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny1 - 2)
+        fixed[i, j] == fixed[i + 1, j] && continue
+        iin, s = fixed[i, j] ? (i + 1, -1.0) : (i, 1.0)
+        outside(fixed[i, j] ? i : i + 1, j) || continue
+        a = coords.yp[iin] - ycenter
+        b = coords.xp[j] - xcenter
+        d = max(_distance_to_circle(a, b, R, s), d_floor * coords.dy)
+        KY[i, j] *= min(coords.dy / d, inv(d_floor))
+        n += 1
+    end
+    return n
+end
 
 # Upwind inflow rate rhocpf(T_up) * q / h of one face [W/(m^3 K)]; 0 for outflow.
 @inline function _upwind_face_rate(q, T_up, h, rhocpf)

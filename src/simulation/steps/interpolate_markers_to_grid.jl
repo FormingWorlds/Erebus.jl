@@ -845,8 +845,221 @@ function interpolate_markers_to_grid!(
 
     # Boundary conditions
     apply_insulating_boundary_conditions!(grids.tk1)
+    apply_fixed_surface_temperature!(state, coords, cfg)
     grids.tk2 .= grids.tk1
 
+    return nothing
+end
+
+"""
+Sum the thermal properties of the rock markers (`tm < 3`) and the weights of all markers
+at the P, Vx and Vy nodes.
+
+$(SIGNATURES)
+
+The weights are the bilinear weights of `marker_to_p_nodes!`, `marker_to_vx_nodes!` and
+`marker_to_vy_nodes!`, so the sums do not depend on the scatter path.
+
+# Arguments
+- `core`: marker core group (`xm`, `ym`, `tm`, `rhocptotalm`, `tkm_rhocptotalm`,
+  `hrtotalm`, `ktotalm` of the step)
+- `marknum`: number of markers in use
+- `coords`: grid coordinates
+
+# Returns
+- `NamedTuple` of P grid arrays: `WP` (all weights), `WPr` (rock weights), `C`
+  (rock heat capacity sum [J/(m^3 K)]), `E` (rock `rhocp T` sum [J/m^3]), `HRr` (rock
+  heating sum [W/m^3]), `KPr` (rock conductivity sum at P nodes), `KXr`, `WXr`, `KYr`,
+  `WYr` (rock conductivity and weight sums at Vx and Vy nodes)
+
+# Throws
+- `DomainError`: if a marker position is not finite
+"""
+function scatter_rock_thermal_sums(core, marknum::Int, coords::GridCoordinates)
+    sz = (coords.Ny1, coords.Nx1)
+    WP, WPr, C, E, HRr, KPr = (zeros(sz) for _ in 1:6)
+    KXr, WXr, KYr, WYr = (zeros(sz) for _ in 1:4)
+    @unpack_coords coords xp yp xvx yvx xvy yvy dx dy
+    @unpack_coords coords jmin_p jmax_p imin_p imax_p jmin_vx jmax_vx imin_vx imax_vx
+    @unpack_coords coords jmin_vy jmax_vy imin_vy imax_vy
+    @inbounds for m in 1:marknum
+        x = core.xm[m]
+        y = core.ym[m]
+        i, j, w = fix_weights(
+            x,
+            y,
+            xp_val,
+            yp_val,
+            dx_val,
+            dy_val,
+            jmin_p_val,
+            jmax_p_val,
+            imin_p_val,
+            imax_p_val,
+        )
+        interpolate_add_to_grid!(i, j, w, 1.0, WP)
+        core.tm[m] < 3 || continue
+        k_m = core.ktotalm[m]
+        interpolate_add_to_grid!(i, j, w, 1.0, WPr)
+        interpolate_add_to_grid!(i, j, w, core.rhocptotalm[m], C)
+        interpolate_add_to_grid!(i, j, w, core.tkm_rhocptotalm[m], E)
+        interpolate_add_to_grid!(i, j, w, core.hrtotalm[m], HRr)
+        interpolate_add_to_grid!(i, j, w, k_m, KPr)
+        i, j, w = fix_weights(
+            x,
+            y,
+            xvx_val,
+            yvx_val,
+            dx_val,
+            dy_val,
+            jmin_vx_val,
+            jmax_vx_val,
+            imin_vx_val,
+            imax_vx_val,
+        )
+        interpolate_add_to_grid!(i, j, w, k_m, KXr)
+        interpolate_add_to_grid!(i, j, w, 1.0, WXr)
+        i, j, w = fix_weights(
+            x,
+            y,
+            xvy_val,
+            yvy_val,
+            dx_val,
+            dy_val,
+            jmin_vy_val,
+            jmax_vy_val,
+            imin_vy_val,
+            imax_vy_val,
+        )
+        interpolate_add_to_grid!(i, j, w, k_m, KYr)
+        interpolate_add_to_grid!(i, j, w, 1.0, WYr)
+    end
+    return (; WP, WPr, C, E, HRr, KPr, KXr, WXr, KYr, WYr)
+end
+
+"""
+Give the free P nodes and the faces between them the thermal properties of their rock
+markers.
+
+$(SIGNATURES)
+
+At a free node with rock, `RHOCP = C / WP` (rock heat capacity over the weight of all
+markers, the heat that the rock markers take), `tk1 = E / C` and `HR = HRr / WP`. A free
+node without rock becomes fixed when it lies within 1.5 cells of `rplanet`. A face between
+2 free nodes, or between a free node and a fixed one, takes the rock conductivity of the
+face, or the rock conductivity of the free node when the face has no rock. Faces between
+2 fixed nodes do not change.
+
+# Arguments
+- `RHOCP`, `tk1`, `HR`: P node heat capacity [J/(m^3 K)], temperature [K] and heating
+  [W/m^3], changed in place
+- `KX`, `KY`: conductivity at Vx and Vy nodes [W/(m K)], changed in place
+- `fixed`: Bool mask of the P grid, changed in place for nodes without rock
+- `sums`: result of `scatter_rock_thermal_sums`
+- `coords`: grid coordinates
+- `xcenter`, `ycenter`, `rplanet`: planet centre and radius [m]
+
+# Returns
+- `Int`: the number of free nodes without rock that became fixed
+
+# Throws
+- `ArgumentError`: if a free node deeper than 1.5 cells below `rplanet` has no rock marker
+"""
+function apply_rock_only_thermal_properties!(
+    RHOCP, tk1, HR, KX, KY, fixed, sums, coords::GridCoordinates; xcenter, ycenter, rplanet
+)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    r_shallow = rplanet - 1.5 * max(coords.dx, coords.dy)
+    n_norock = 0
+    @inbounds for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+        fixed[i, j] && continue
+        if sums.WPr[i, j] > 0.0 && sums.C[i, j] > 0.0
+            RHOCP[i, j] = sums.C[i, j] / sums.WP[i, j]
+            tk1[i, j] = sums.E[i, j] / sums.C[i, j]
+            HR[i, j] = sums.HRr[i, j] / sums.WP[i, j]
+        else
+            r = hypot(coords.xp[j] - xcenter, coords.yp[i] - ycenter)
+            r > r_shallow || throw(
+                ArgumentError(
+                    "P node ($i, $j) at r = $r m inside the planet has no rock marker"
+                ),
+            )
+            fixed[i, j] = true
+            n_norock += 1
+        end
+    end
+    k_node(i, j) = sums.KPr[i, j] / sums.WPr[i, j]
+    @inbounds for j in 2:(Nx1 - 2), i in 2:(Ny1 - 1)
+        fixed[i, j] && fixed[i, j + 1] && continue
+        if sums.WXr[i, j] > 0.0
+            KX[i, j] = sums.KXr[i, j] / sums.WXr[i, j]
+        else
+            KX[i, j] = fixed[i, j] ? k_node(i, j + 1) : k_node(i, j)
+        end
+    end
+    @inbounds for j in 2:(Nx1 - 1), i in 2:(Ny1 - 2)
+        fixed[i, j] && fixed[i + 1, j] && continue
+        if sums.WYr[i, j] > 0.0
+            KY[i, j] = sums.KYr[i, j] / sums.WYr[i, j]
+        else
+            KY[i, j] = fixed[i, j] ? k_node(i + 1, j) : k_node(i, j)
+        end
+    end
+    return n_norock
+end
+
+"""
+Hold the P nodes outside the planet at the disk temperature
+(`thermodynamics.surface_temperature = :fixed`).
+
+$(SIGNATURES)
+
+Builds `state.grids.fixed_tk` from the planet centre and radius of `state.accumulators`,
+gives the free nodes and faces their rock-only properties
+(`apply_rock_only_thermal_properties!`), places the fixed value at the planet radius
+(`apply_cut_cell_conductance!`) and sets `tk1` of the fixed nodes to the disk temperature
+of the step. Does nothing with `:sticky_air`.
+
+# Arguments
+- `state`: simulation state after the scatter
+- `coords`: grid coordinates
+- `cfg`: simulation configuration
+
+# Returns
+- `nothing`
+
+# Throws
+- `ArgumentError`: if the state has no `fixed_tk` array, or from
+  `apply_rock_only_thermal_properties!`
+"""
+function apply_fixed_surface_temperature!(
+    state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig
+)
+    cfg.thermodynamics.surface_temperature === :fixed || return nothing
+    g = state.grids
+    fixed = g.fixed_tk
+    fixed === nothing && throw(
+        ArgumentError("surface_temperature = :fixed but this state has no fixed_tk array"),
+    )
+    acc = state.accumulators
+    geo = (; xcenter=acc.xcenter, ycenter=acc.ycenter, rplanet=acc.rplanet)
+    T_fixed, _, _ = compute_ambient_conditions(state.timesum, cfg.disk)
+    compute_fixed_surface_mask!(fixed, coords; geo...)
+    marknum = length(state.markers)
+    core = state.markers.core
+    sums = scatter_rock_thermal_sums(core, marknum, coords)
+    n_norock = apply_rock_only_thermal_properties!(
+        g.RHOCP, g.tk1, g.HR, g.KX, g.KY, fixed, sums, coords; geo...
+    )
+    apply_cut_cell_conductance!(g.KX, g.KY, fixed, coords; geo...)
+    g.tk1[fixed] .= T_fixed
+    n_rock_out = count(
+        m ->
+            core.tm[m] < 3 &&
+            hypot(core.xm[m] - geo.xcenter, core.ym[m] - geo.ycenter) > geo.rplanet,
+        1:marknum,
+    )
+    @debug "fixed surface temperature" T_fixed n_fixed = count(fixed) n_norock n_rock_out
     return nothing
 end
 
