@@ -464,3 +464,33 @@ test_name = "test_fixed_surface_temperature.jl"
 page = "explanations/discretization_numerics.md"
 number = "1.8"
 test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.030"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.016"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.0086"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.39"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "245.4"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "290"
+test_name = "test_fixed_surface_temperature.jl"
