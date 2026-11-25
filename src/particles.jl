@@ -4652,8 +4652,9 @@ bilinear weights, also under the spherical metric.
 # Throws
 
     - `DomainError`: if `dsubgridt` or `dt` is negative or not finite
-    - `ArgumentError`: if `tk1`, `DT`, `TKSUM` or `RHOCPSUM` does not have the size of the
-      P grid
+    - `ArgumentError`: if `dsubgridt` and `dt` are positive and `tk1`, `DT`, `TKSUM` or
+      `RHOCPSUM` does not have the size of the P grid
+    - `DomainError`: if the position of a rock marker is not finite
 """
 function apply_subgrid_temperature_diffusion!(
     xm,
@@ -4959,6 +4960,7 @@ temperature after the first stage. Each stage keeps the heat where a receiving m
 
     - `ArgumentError`: if `DT_conduction` or `tk1` does not have the size of `DT`, if an
       array is too short, or if a grid array does not have the size of the P grid
+    - `DomainError`: if `marknum` is negative or the position of a rock marker is not finite
     - `MethodError`: if `tk1` is not a matrix
     - `TypeError`: if `tkm_floor` is not a vector
 """
