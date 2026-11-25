@@ -161,6 +161,41 @@ function _darcy_heating_resistances(g, ws::SimulationWorkspaces, cfg::Simulation
 end
 
 """
+Return the face conductivities of the explicit spherical metric term.
+
+$(SIGNATURES)
+
+With `thermodynamics.surface_temperature = :fixed` these are the rock face conductivities
+before the cut-cell scaling, `ws.rock_sums.KXu` and `KYu`, which
+`apply_fixed_surface_temperature!` sets in each marker-to-grid pass. The term takes the
+step-start temperature, so a cut-cell face (up to 1000 times its rock value) would make
+it a large explicit sink next to a hot interior, and the solve could take a free node
+below the fixed value. Otherwise `g.KX`, `g.KY`.
+
+# Arguments
+
+    - `g`: grid arrays of the state
+    - `ws`: simulation workspaces
+    - `cfg`: simulation configuration
+
+# Returns
+
+    - `(KX, KY)`: conductivities at Vx and Vy nodes [W/(m K)]
+
+# Throws
+
+    - `ArgumentError`: with `:fixed` when `ws.rock_sums` is `nothing`
+"""
+function _metric_face_conductivities(g, ws::SimulationWorkspaces, cfg::SimulationConfig)
+    cfg.thermodynamics.surface_temperature === :fixed || return g.KX, g.KY
+    sums = ws.rock_sums
+    sums === nothing && throw(
+        ArgumentError("surface_temperature = :fixed but the workspace has no rock_sums")
+    )
+    return sums.KXu, sums.KYu
+end
+
+"""
 Solve the thermal energy conservation equation with segregation sources and convection.
 
 $(SIGNATURES)
@@ -225,11 +260,12 @@ function solve_thermal_energy!(
                 "A checkpoint made with the option off must set it to false.",
             ),
         )
+        KX_metric, KY_metric = _metric_face_conductivities(g, ws, cfg)
         compute_spherical_metric_heat_source!(
             g.Q_metric,
             g.tk1,
-            g.KX,
-            g.KY,
+            KX_metric,
+            KY_metric,
             coords;
             xcenter=state.accumulators.xcenter,
             ycenter=state.accumulators.ycenter,

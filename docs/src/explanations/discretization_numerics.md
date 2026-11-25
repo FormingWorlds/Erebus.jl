@@ -534,6 +534,11 @@ so its heat flux is $k (T_\text{disk} - T)/d$, and the fixed value acts at $R_p$
 The floor $10^{-3} \Delta x$ keeps the face finite when a free node lies on the circle; the face is then at most 1000 times its rock value.
 A $y$ face uses $\Delta y$ in the same way.
 
+The spherical metric term of the heat equation takes the rock face conductivity before this scaling.
+The term is explicit: it uses the temperature at the start of the step.
+With the cut-cell value, it becomes a large heat sink next to a hot interior.
+One backward-Euler step could then take a free node below the disk temperature.
+
 A free node without rock markers within 1.5 cells of $R_p$ also becomes a fixed node.
 The first such node of a run logs a warning.
 A free node without rock deeper in the planet stops the run with an `ArgumentError`.
@@ -545,15 +550,23 @@ It refuses accretion, telescoping, venting, the atmosphere and `thermodynamics.s
 
 A test solves the steady heat equation of a sphere with uniform heating on the grid alone, with the spherical metric and no markers.
 It fits an effective radius $R_\text{eff}$ to the free node temperatures and compares it with $R_p$.
-With the planet centre on a node, $|R_\text{eff} - R_p|$ is $0.025\,\Delta x$, $0.014\,\Delta x$ and $0.0073\,\Delta x$ at 33, 65 and 129 nodes per side.
-The observed order is 1.88 to 1.98 for centres shifted by 0, 0.13 and 0.37 cells.
-The test requires an order between 1.5 and 3.0 and an error below 0.05 $\Delta x$ at 129 nodes.
+With the planet centre on a node, $|R_\text{eff} - R_p|$ is $0.030\,\Delta x$, $0.016\,\Delta x$ and $0.0086\,\Delta x$ at 33, 65 and 129 nodes per side.
+The observed order is 1.87 to 2.00 for centres shifted by 0, 0.13 and 0.37 cells.
+The test requires an order of at least 1.8 and below 3.0 at each refinement, and an error below 0.05 $\Delta x$ at 129 nodes.
 Without the cut-cell face (the node staircase), the error at 65 nodes is $0.39\,\Delta x$.
+
+A second grid test takes 1 step from rock at 1000 K without heating.
+The step $\Delta t$ is 1 and 100 times $\Delta x^2/\kappa$, where $\kappa = k/(\rho c_p)$ [m$^2$/s] is the thermal diffusivity.
+At 33 and 65 nodes per side and all 3 centre shifts, no free node goes below the disk temperature.
+With the cut-cell faces in the metric term, the step of $1\,\Delta x^2/\kappa$ at 65 nodes and a shift of 0.13 cells gives 245.4 K against a disk temperature of 250 K.
 
 Limits:
 the solve does not use the staircase of fixed nodes as the surface, so the result depends on the cut-cell face.
 The order above holds for the grid solve.
 The full step with markers has not been measured against an analytic solution.
+The metric term stays explicit, so a long enough step from a hot interior still takes a free node below the disk temperature.
+In the full step at `Nx = 17` with rock at 1000 K, a step of $10\,\Delta x^2/\kappa$ keeps every free node above 290 K and a step of $100\,\Delta x^2/\kappa$ does not; $\kappa$ is the smallest diffusivity of the free nodes.
+In a run, the thermal iterations shorten a step whose largest temperature change exceeds `time.DTmax` [K].
 A rock marker between the last free node and $R_p$ takes a bilinear increment that includes the increment 0 of the fixed node.
 Subgrid diffusion relaxes such a marker toward the fixed node temperature at the node centre, not at $R_p$.
 The heat of that relaxation at fixed nodes leaves the rock as boundary heat.

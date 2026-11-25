@@ -459,3 +459,8 @@ test_name = "test_fixed_surface_temperature.jl"
 page = "explanations/discretization_numerics.md"
 number = "1000"
 test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "1.8"
+test_name = "test_fixed_surface_temperature.jl"

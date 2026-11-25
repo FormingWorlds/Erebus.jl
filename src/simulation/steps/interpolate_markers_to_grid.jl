@@ -77,8 +77,10 @@ end
 Interpolate marker properties to staggered Eulerian mesh and normalize nodal properties.
 
 `rock_sums` (from `allocate_rock_thermal_sums`) holds the rock-marker sums of
-`apply_fixed_surface_temperature!` under `thermodynamics.surface_temperature = :fixed`;
-with `nothing` that pass allocates them.
+`apply_fixed_surface_temperature!` under `thermodynamics.surface_temperature = :fixed`
+and the face conductivities before the cut-cell scaling. `solve_thermal_energy!` reads
+these from `ws.rock_sums`, so a time step passes `ws.rock_sums` here; with `nothing` the
+pass allocates its own arrays.
 
 # Mutates:
 - `state.grids.ETA`
@@ -857,7 +859,8 @@ function interpolate_markers_to_grid!(
 end
 
 """
-Allocate the 10 P grid arrays of `scatter_rock_thermal_sums!`.
+Allocate the 10 P grid arrays of `scatter_rock_thermal_sums!` and the 2 arrays of the
+face conductivities before the cut-cell scaling.
 
 $(SIGNATURES)
 
@@ -866,7 +869,8 @@ $(SIGNATURES)
 
 # Returns
 - `NamedTuple` of zero `Ny1` x `Nx1` arrays `WP`, `WPr`, `C`, `E`, `HRr`, `KPr`, `KXr`,
-  `WXr`, `KYr`, `WYr`
+  `WXr`, `KYr`, `WYr`, `KXu`, `KYu`; `apply_fixed_surface_temperature!` sets `KXu` and
+  `KYu` [W/(m K)] for the spherical metric term of the thermal solve
 
 # Throws
 - nothing
@@ -884,6 +888,8 @@ function allocate_rock_thermal_sums(coords::GridCoordinates)
         WXr=zeros(sz),
         KYr=zeros(sz),
         WYr=zeros(sz),
+        KXu=zeros(sz),
+        KYu=zeros(sz),
     )
 end
 
@@ -901,7 +907,7 @@ The weights are the bilinear weights of `marker_to_p_nodes!`, `marker_to_vx_node
   weights), `WPr` (rock weights), `C` (rock heat capacity sum [J/(m^3 K)]), `E` (rock
   `rhocp T` sum [J/m^3]), `HRr` (rock heating sum [W/m^3]), `KPr` (rock conductivity sum
   at P nodes), `KXr`, `WXr`, `KYr`, `WYr` (rock conductivity and weight sums at Vx and Vy
-  nodes)
+  nodes); the face conductivities `KXu` and `KYu` are reset to 0
 - `core`: marker core group (`xm`, `ym`, `tm`, `rhocptotalm`, `tkm_rhocptotalm`,
   `hrtotalm`, `ktotalm` of the step)
 - `marknum`: number of markers in use
@@ -1056,7 +1062,8 @@ $(SIGNATURES)
 
 Builds `state.grids.fixed_tk` from the planet centre and radius of `state.accumulators`,
 gives the free nodes and faces their rock-only properties
-(`apply_rock_only_thermal_properties!`), places the fixed value at the planet radius
+(`apply_rock_only_thermal_properties!`), keeps a copy of these face conductivities in
+`KXu` and `KYu` of the sums, places the fixed value at the planet radius
 (`apply_cut_cell_conductance!`) and sets `tk1` of the fixed nodes to the disk temperature
 of the step. The counts go to `state.accumulators.fixed_surface_counts`. The first pass of
 a run that makes free nodes without rock fixed logs a warning. Does nothing with
@@ -1101,6 +1108,9 @@ function apply_fixed_surface_temperature!(
     n_norock = apply_rock_only_thermal_properties!(
         g.RHOCP, g.tk1, g.HR, g.KX, g.KY, fixed, sums, coords; geo...
     )
+    # The explicit metric term of the solve takes the faces before the cut-cell scaling
+    copyto!(sums.KXu, g.KX)
+    copyto!(sums.KYu, g.KY)
     apply_cut_cell_conductance!(g.KX, g.KY, fixed, coords; geo...)
     n_fixed = 0
     @inbounds for k in eachindex(fixed)

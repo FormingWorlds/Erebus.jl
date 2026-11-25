@@ -32,8 +32,10 @@ The box "Test details" at the end of each case gives the reference, the toleranc
   The body forms at the time $t_{form}$ after them.
 - Melting, reactions, pore water and thermal buoyancy are off.
   Heat conduction, radiogenic heat, cold pressing and sintering are the only processes.
-- A run stops with an error when a node inside the planet had no rock marker in any step, because that node would hold 290 K.
-  No run on this page stops.
+- A free node without rock markers within 1.5 cells of $R_p$ becomes a fixed node at 290 K for that step.
+  The validation check fails the run after it ends when any step made such a node fixed.
+  A free node without rock deeper in the planet stops the run at once with an error.
+  No run on this page fails this check.
 
 ---
 

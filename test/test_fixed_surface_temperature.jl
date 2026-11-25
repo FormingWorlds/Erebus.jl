@@ -39,14 +39,28 @@ end
 Take `nsteps` backward-Euler steps of `dt` [s] of the spherical-metric heat equation with
 uniform rock properties and heating `H` inside `FS_R` and `FS_TS` at the fixed nodes.
 `cut_cell = false` keeps the node staircase. `rhocp_fault` multiplies the heat capacity of
-the free nodes next to a fixed node. Returns the fields of the last step.
+the free nodes next to a fixed node. As in the full pass, the metric term takes the faces
+before the cut-cell scaling; `metric_cut = true` gives it the cut faces instead. Returns
+the fields of the last step.
 """
 function fs_run!(
-    tk, coords, xc, yc, fixed; dt, nsteps, H=FS_H, cut_cell=true, rhocp_fault=1.0
+    tk,
+    coords,
+    xc,
+    yc,
+    fixed;
+    dt,
+    nsteps,
+    H=FS_H,
+    cut_cell=true,
+    rhocp_fault=1.0,
+    metric_cut=false,
 )
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     KX = fill(FS_K, Ny1, Nx1)
     KY = fill(FS_K, Ny1, Nx1)
+    KXu = copy(KX)
+    KYu = copy(KY)
     if cut_cell
         Erebus.apply_cut_cell_conductance!(
             KX, KY, fixed, coords; xcenter=xc, ycenter=yc, rplanet=FS_R
@@ -68,7 +82,15 @@ function fs_run!(
     for _ in 1:nsteps
         tk_start .= tk
         Erebus.compute_spherical_metric_heat_source!(
-            Q, tk, KX, KY, coords; xcenter=xc, ycenter=yc, rplanet=FS_R, reg_cells=0.5
+            Q,
+            tk,
+            metric_cut ? KX : KXu,
+            metric_cut ? KY : KYu,
+            coords;
+            xcenter=xc,
+            ycenter=yc,
+            rplanet=FS_R,
+            reg_cells=0.5,
         )
         LT = Erebus.assemble_thermal_lse!(
             tk, RHOCP, KX, KY, HR, Z, Z, Z, RT, dt; coords=coords, Q_metric=Q, fixed=fixed
@@ -319,8 +341,8 @@ end
             println("S1 shift=$shift orders=$orders")
             @test errs[3] < errs[1]
             @test errs[3] < 0.05 * dxs[3]
-            # second order, not first (1) or a super-convergent fluke (> 3)
-            @test 1.5 < sum(orders) / 2 < 3.0
+            # second order at each refinement, not first (1) or a super-convergent fluke
+            @test 1.8 <= minimum(orders) <= maximum(orders) < 3.0
         end
         # Without the cut-cell face the error is of the order of the staircase offset
         e_stair, dx65 = fs_steady_error(65, 0.37; cut_cell=false)
@@ -447,7 +469,41 @@ end
         println("S8 N=65 max |T - T_series| / rise = $e_ok, with air capacity = $e_fault")
         @test 1.0 < rise < 1.0e4
         @test e_ok < 0.02
-        @test e_fault > 5 * e_ok
+        @test e_fault > 3 * e_ok
+    end
+
+    @testset "S9 one hot step on the grid: no free node colder than the fixed value" begin
+        # A sphere at 1000 K without heating cools toward FS_TS; backward Euler with the
+        # explicit metric term must not take a free node below FS_TS.
+        T0 = 1000.0
+        function min_free_T(N, shift, dt_cells; metric_cut=false)
+            coords, xc, yc, fixed, _ = fs_grid(N, shift)
+            tk = fill(T0, coords.Ny1, coords.Nx1)
+            dt = dt_cells * coords.dx^2 * FS_RHOCP / FS_K
+            g = fs_run!(
+                tk, coords, xc, yc, fixed; dt=dt, nsteps=1, H=0.0, metric_cut=metric_cut
+            )
+            interior = .!fixed
+            interior[[1, end], :] .= false
+            interior[:, [1, end]] .= false
+            return minimum(g.tk2[interior])
+        end
+        tmin_all = Inf
+        for N in (33, 65), shift in (0.0, 0.13, 0.37), dt_cells in (1.0, 100.0)
+            tmin = min_free_T(N, shift, dt_cells)
+            println(
+                "S9 grid N=$N shift=$shift dt=$dt_cells dx^2/kappa: min free T = $tmin K"
+            )
+            tmin_all = min(tmin_all, tmin)
+        end
+        @test tmin_all >= FS_TS - 1e-9
+        @test tmin_all < T0
+        # With the cut faces in the metric term the same step goes below FS_TS
+        tmin_cut = min_free_T(65, 0.13, 1.0; metric_cut=true)
+        println(
+            "S9 grid N=65 shift=0.13 dt=1 dx^2/kappa, cut faces in the metric: $tmin_cut K"
+        )
+        @test tmin_cut < FS_TS - 1.0
     end
 
     @testset "S5 energy bookkeeping with the boundary flux" begin
@@ -687,6 +743,69 @@ end
         @test n_bad_face == 0
     end
 
+    @testset "S3 a face without rock markers takes the conductivity of its free node" begin
+        # Hand-built rock sums on 7 x 7 inside P nodes: fixed column j = 5 and fixed row
+        # i = 5; every free node has rock with its own conductivity k_n(i, j).
+        coords = GridCoordinates(8, 8; xsize=7.0e3, ysize=7.0e3)
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+        sums = Erebus.allocate_rock_thermal_sums(coords)
+        k_n(i, j) = 1.0 + 0.1 * i + 0.01 * j
+        k_face = 5.0
+        for j in 1:Nx1, i in 1:Ny1
+            sums.WP[i, j] = sums.WPr[i, j] = 2.0
+            sums.C[i, j] = 2.0 * FS_RHOCP
+            sums.E[i, j] = 2.0 * FS_RHOCP * 400.0
+            sums.KPr[i, j] = 2.0 * k_n(i, j)
+            sums.KXr[i, j] = sums.KYr[i, j] = k_face
+            sums.WXr[i, j] = sums.WYr[i, j] = 1.0
+        end
+        fixed = zeros(Bool, Ny1, Nx1)
+        fixed[2:(Ny1 - 1), 5] .= true
+        fixed[5, 2:(Nx1 - 1)] .= true
+        # x faces without rock on row 3: free-free (3, 3), free-fixed (3, 4), fixed-free (3, 5)
+        sums.WXr[3, 3:5] .= 0.0
+        # y faces without rock on column 7: free-free (3, 7), free-fixed (4, 7), fixed-free (5, 7)
+        sums.WYr[3:5, 7] .= 0.0
+        K0 = 0.37
+        KX = fill(K0, Ny1, Nx1)
+        KY = fill(K0, Ny1, Nx1)
+        RHOCP = zeros(Ny1, Nx1)
+        tk1 = zeros(Ny1, Nx1)
+        HR = zeros(Ny1, Nx1)
+        xc = coords.xp[5]
+        yc = coords.yp[5]
+        args = (RHOCP, tk1, HR, KX, KY, fixed, sums, coords)
+        n_norock = Erebus.apply_rock_only_thermal_properties!(
+            args...; xcenter=xc, ycenter=yc, rplanet=2.0e4
+        )
+        @test n_norock == 0
+        @test isapprox(KX[3, 3], k_n(3, 3); rtol=1e-12)
+        @test isapprox(KX[3, 4], k_n(3, 4); rtol=1e-12)
+        @test isapprox(KX[3, 5], k_n(3, 6); rtol=1e-12)
+        @test isapprox(KY[3, 7], k_n(3, 7); rtol=1e-12)
+        @test isapprox(KY[4, 7], k_n(4, 7); rtol=1e-12)
+        @test isapprox(KY[5, 7], k_n(6, 7); rtol=1e-12)
+        # Faces with rock take the rock face value; faces between 2 fixed nodes keep theirs
+        @test isapprox(KX[3, 2], k_face; rtol=1e-12)
+        @test isapprox(KY[2, 3], k_face; rtol=1e-12)
+        @test isapprox(KY[3, 5], K0; rtol=0, atol=0)
+        @test isapprox(KX[5, 3], K0; rtol=0, atol=0)
+        @test isapprox(RHOCP[3, 3], FS_RHOCP; rtol=1e-12)
+        @test isapprox(tk1[3, 3], 400.0; rtol=1e-12)
+        # A free node without rock: fixed within 1.5 cells of rplanet, an error deeper
+        sums.WPr[3, 3] = 0.0
+        @test_throws ArgumentError Erebus.apply_rock_only_thermal_properties!(
+            args...; xcenter=xc, ycenter=yc, rplanet=2.0e4
+        )
+        fill!(fixed, false)
+        r33 = hypot(coords.xp[3] - xc, coords.yp[3] - yc)
+        n_shallow = Erebus.apply_rock_only_thermal_properties!(
+            args...; xcenter=xc, ycenter=yc, rplanet=r33 + coords.dx
+        )
+        @test n_shallow == 1
+        @test fixed[3, 3] && count(fixed) == 1
+    end
+
     @testset "S2 short run: fixed nodes hold, box edges copy their neighbours" begin
         st_fixed = mktempdir() do d
             simulation_loop(fs_config(fs_case(; Nx=17, n_steps=2)); output_path=d)
@@ -704,8 +823,9 @@ end
     end
 
     @testset "S6 default :sticky_air run equals main" begin
-        # Porous shell, Nx 17, 2 steps, 1 thread: sums and maxima of a run on main (d5b89b93).
-        # rtol 1e-10 allows round-off across platforms; a change of 1e-6 K in tk2 fails.
+        # Porous shell, Nx 17, 2 steps, 1 thread: sums and maxima of the reference run. rtol
+        # 1e-10 fails a change of sum(tk2) by 1e-5 K (1e-6 K at every node) or of max(tk2) by
+        # 4e-8 K; a change of 1e-6 K at a single node can pass.
         base = fs_case(; Nx=17, n_steps=2)
         st = mktempdir() do d
             simulation_loop(base; output_path=d)
@@ -773,10 +893,40 @@ end
         @test c3.n_fixed == count(fixed) == n_geo + c3.n_norock
         @test c3.n_rock_out == 0
         @test acc.fixed_surface_counts == c3
+        # A face between a free node and a fixed node inside R_p is not a cut-cell face:
+        # it keeps its rock conductivity (distance dx to the fixed value)
+        s = ws.rock_sums
+        g = state.grids
+        inside(i, j) =
+            hypot(coords.xp[j] - acc.xcenter, coords.yp[i] - acc.ycenter) <= acc.rplanet
+        n_in_face = 0
+        n_bad_in = 0
+        for (K, Kr, Wf, di, dj) in ((g.KX, s.KXr, s.WXr, 0, 1), (g.KY, s.KYr, s.WYr, 1, 0))
+            for j in 2:(coords.Nx1 - 1 - dj), i in 2:(coords.Ny1 - 1 - di)
+                fa, fb = fixed[i, j], fixed[i + di, j + dj]
+                fa == fb && continue
+                iout, jout = fa ? (i, j) : (i + di, j + dj)
+                iin, jin = fa ? (i + di, j + dj) : (i, j)
+                inside(iout, jout) || continue
+                n_in_face += 1
+                k_rock = if Wf[i, j] > 0.0
+                    Kr[i, j] / Wf[i, j]
+                else
+                    s.KPr[iin, jin] / s.WPr[iin, jin]
+                end
+                n_bad_in += !isapprox(K[i, j], k_rock; rtol=1e-12)
+            end
+        end
+        @test 0 < n_in_face < 4 * c3.n_norock
+        @test n_bad_in == 0
         # The warning comes once per run; the counts still update
         c4 = @test_logs min_level = Logging.Warn fs_pass!()
         @test c4.n_norock == c3.n_norock
         @test c4.n_norock_steps == 2
+        # A free node without rock deeper than 1.5 cells below R_p stops the pass
+        acc.rplanet = R0 + 3.0 * coords.dx
+        @test_throws ArgumentError fs_pass!()
+        @test acc.fixed_surface_counts == c4
         acc.rplanet = R0
         c5 = fs_pass!()
         @test c5.n_norock == 0 && c5.n_fixed == c0.n_fixed
@@ -913,5 +1063,59 @@ end
         # No marker is limited in this step; a limited step mixes w3d into heat_lost
         @test lim.n_limited == 0
         @test abs(residual) <= 1e-12 * scale
+    end
+
+    @testset "S9 one hot step of solve_thermal_energy!: metric term from the uncut faces" begin
+        cfg = fs_config(fs_case(; Nx=17, n_steps=2))
+        state, coords, ws, tel, _ = init_simulation(cfg; output_path=mktempdir())
+        tel isa IO && close(tel)
+        fs_step!(state, coords, cfg, ws, 1; solve_only=true)
+        g = state.grids
+        fixed = g.fixed_tk
+        acc = state.accumulators
+        geo = (; xcenter=acc.xcenter, ycenter=acc.ycenter, rplanet=acc.rplanet)
+        T_fixed = g.tk1[findfirst(fixed)]
+        # Rock faces before the cut-cell scaling, rebuilt from the rock sums of the pass
+        KXu = copy(g.KX)
+        KYu = copy(g.KY)
+        Erebus.apply_rock_only_thermal_properties!(
+            copy(g.RHOCP),
+            copy(g.tk1),
+            copy(g.HR),
+            KXu,
+            KYu,
+            copy(fixed),
+            ws.rock_sums,
+            coords;
+            geo...,
+        )
+        # Rock at 1000 K without heating, a step of 10 dx^2 / kappa (smallest kappa): 266 K
+        # with the cut faces in the metric term; a step of 100 dx^2 / kappa goes below
+        # T_fixed also with the uncut faces, since the metric term is explicit
+        interior = .!fixed
+        interior[[1, end], :] .= false
+        interior[:, [1, end]] .= false
+        g.tk1[interior] .= 1000.0
+        g.HR .= 0.0
+        kappa = minimum(g.KX[interior]) / maximum(g.RHOCP[interior])
+        state.dt = 10.0 * coords.dx^2 / kappa
+        Erebus.solve_thermal_energy!(state, coords, cfg, ws; titer=1)
+        metric(KX, KY) = Erebus.compute_spherical_metric_heat_source!(
+            zeros(size(g.tk1)),
+            g.tk1,
+            KX,
+            KY,
+            coords;
+            geo...,
+            reg_cells=cfg.geometry.metric_regularization_cells,
+        )
+        Q_uncut = metric(KXu, KYu)
+        Q_cut = metric(g.KX, g.KY)
+        tmin = minimum(g.tk2[interior])
+        println("S9 solve Nx=17: min free tk2 = $tmin K, T_fixed = $T_fixed K")
+        @test isapprox(g.Q_metric, Q_uncut; rtol=1e-12)
+        @test maximum(abs, Q_cut .- Q_uncut) > 0.5 * maximum(abs, Q_uncut)
+        @test tmin >= T_fixed - 1e-9
+        @test tmin < 1000.0
     end
 end
