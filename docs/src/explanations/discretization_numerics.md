@@ -557,7 +557,8 @@ The full step with markers has not been measured against an analytic solution.
 A rock marker between the last free node and $R_p$ takes a bilinear increment that includes the increment 0 of the fixed node.
 Subgrid diffusion relaxes such a marker toward the fixed node temperature at the node centre, not at $R_p$.
 The heat of that relaxation at fixed nodes leaves the rock as boundary heat.
-The checks are in `test/test_fixed_surface_temperature.jl`; no validation page covers this option yet.
+The checks are in `test/test_fixed_surface_temperature.jl`.
+The validation case [Porous Shell](../validation/porous_shell.md) runs this option in the complete time loop against a 1-D model.
 
 ---
 

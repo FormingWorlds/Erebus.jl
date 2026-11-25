@@ -128,9 +128,16 @@ function fs_config(cfg::SimulationConfig; surface_temperature=:fixed, kwargs...)
     )
 end
 
+# Porous shell case with the sticky air of the Erebus default; `fs_config` makes it :fixed.
 function fs_case(; Nx=17, n_steps=2, k_air=nothing)
     return FS_PSV.make_porous_shell_config(;
-        Nx=Nx, phi_init=0.25, t_form_yr=2.5e6, n_steps=n_steps, dt_yr=5.0e4, k_air=k_air
+        Nx=Nx,
+        phi_init=0.25,
+        t_form_yr=2.5e6,
+        n_steps=n_steps,
+        dt_yr=5.0e4,
+        k_air=k_air,
+        surface_temperature=:sticky_air,
     )
 end
 

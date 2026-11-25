@@ -253,7 +253,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_pressure_diffusion -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_pressure_diffusion.toml` (Source commit `7b4a99c0`, config SHA-256 `07e42956b9e3`)
+**Validation record**: `benchmarks/records/spherical_pressure_diffusion.toml` (Source commit `b16eaac1`, config SHA-256 `aacbb47f3547`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
