@@ -66,13 +66,16 @@ $$\rho c_{p,\text{eff}} = \rho c_p + \rho_s L_m \frac{\partial F_m}{\partial T}$
 
 Because $\Delta T_{\text{melt}} = T_l(P) - T_s(P)$ remains constant under the parallel Clapeyron shift, the derivative in the melting interval is constant:
 
-$$\frac{\partial F_m}{\partial T} = \begin{cases} \frac{1}{T_l - T_s} & \text{if } T_s(P) \le T \le T_l(P) \\ 0.0 & \text{otherwise} \end{cases}$$
+$$\frac{\partial F_m}{\partial T} = \begin{cases} \frac{1}{T_l - T_s} & \text{if } T_s(P) < T < T_l(P) \\ 0.0 & \text{otherwise} \end{cases}$$
 
 Integrating the effective heat capacity over the solidus-liquidus interval yields the exact total latent heat enthalpy:
 
 $$\int_{T_s}^{T_l} \left(\rho c_{p,\text{eff}} - \rho c_p\right) \, dT = \rho_s L_m \int_{T_s}^{T_l} \frac{1}{T_l - T_s} \, dT = \rho_s L_m$$
 
-This formulation satisfies total energy conservation without requiring non-linear enthalpy iterations.
+This integral is exact, so in the limit of small steps a cell that crosses the whole interval takes up the full latent heat.
+Erebus takes the heat capacity at the temperature of the start of each step and does no non-linear enthalpy iterations.
+A cell that enters or leaves the interval within a step therefore takes the latent heat one step late, and its total latent heat can differ from $\rho_s L_m$ by up to the latent heat of one step.
+This lag is an enthalpy error of first order in the time step, as the section on [thermal subcycles](discretization_numerics.md#3.-Thermal-Subcycles-and-Temperature-Change-Limit) explains.
 
 ---
 

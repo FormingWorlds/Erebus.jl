@@ -102,6 +102,7 @@ integration_tests = [
     "test_validation_spherical_pressure_diffusion.jl",
     "test_validation_spherical_momentum.jl",
     "test_validation_porous_shell.jl",
+    "test_melting_shell.jl",
 ]
 
 all_test_files = filter(f -> endswith(f, ".jl") && f != "runtests.jl", readdir(@__DIR__))

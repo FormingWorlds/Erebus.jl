@@ -465,6 +465,10 @@ $$dt_t \leftarrow dt_t \frac{\text{DTmax}}{\Delta T_{\text{max}}}$$
 
 This prevents thermal spikes from concentrated radiogenic decay or rapid phase change.
 
+The latent heat of melting enters the heat solve as an apparent heat capacity, taken from the marker temperature at the start of the step.
+A marker that enters or leaves the melting interval within a step therefore takes the latent heat one step late, an enthalpy error of first order in the time step.
+The [melting shell validation](../validation/melting_shell.md) measures this lag.
+
 ### 4. Hydrofracture Permeability and Drag Resistance
 
 Dynamic hydrofracturing increases matrix permeability when pore fluid pressure exceeds the minimum compressive stress plus rock tensile strength:

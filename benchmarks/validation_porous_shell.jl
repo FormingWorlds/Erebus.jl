@@ -198,8 +198,23 @@ function q_al_step(t::Float64, dt::Float64, ratio_al::Float64)
 end
 
 """
+    rhocp_app_ref(T, phi; L_melt, T_sol, T_liq) -> Float64
+
+Apparent volumetric heat capacity [J/(m^3 K)] of rock with dry porosity `phi` at `T` [K]
+for latent heat `L_melt` [J/kg] over the melting interval `T_sol` to `T_liq` [K]:
+`(1 - phi) (RHOCP_SOL + RHO_SOL L_melt / (T_liq - T_sol))` for `T_sol < T < T_liq`, the
+sensible term alone outside. `solve_porous_sphere` takes its heat capacity from here.
+"""
+function rhocp_app_ref(T, phi; L_melt, T_sol, T_liq)
+    C = RHOCP_SOL * (1.0 - phi)
+    T_sol < T < T_liq && (C += RHO_SOL * L_melt / (T_liq - T_sol) * (1.0 - phi))
+    return C
+end
+
+"""
     solve_porous_sphere(; R, phi_init, t_form_yr, t_end_yr, dt_yr, Nr=2000,
-                        ratio_al=RATIO_AL_L16, T0=T_SPACE, stop_cold=true) -> NamedTuple
+                        ratio_al=RATIO_AL_L16, T0=T_SPACE, stop_cold=true,
+                        melt=nothing) -> NamedTuple
 
 One-dimensional spherical finite-volume run: backward Euler conduction with k, rho cp and
 heat from the porosity at the start of the step, Dirichlet `T_SPACE` at `R`, then the dry
@@ -207,12 +222,18 @@ porosity step at the new temperature and the pressure of the old porosity (the o
 an Erebus step). At the start the porosity is cold pressed on the hydrostatic profile.
 The run stops at `t_end_yr` after formation, or with `stop_cold` once the peak has passed
 and every cell is below `T_SINTER` (no further sintering).
+With `melt = (; L_melt, T_sol, T_liq)` the heat capacity of the step is `rhocp_app_ref` at
+the temperature of the step start (the Erebus order): it adds the latent heat
+`RHO_SOL L_melt / (T_liq - T_sol)` for `T_sol < T < T_liq`, times `1 - phi`.
 
 Returns `(; r, phi, phi0, dphi_sinter, T, T_max, d_shell, d_phi04, t_peak_yr, T_peak,
-t_stop_yr, energy_residual, n_steps)`: profiles at the cell centres, the depth [m] of the
+t_stop_yr, energy_residual, enthalpy_residual, F_max, n_steps)`: profiles at the cell centres, the depth [m] of the
 unsintered shell (`dphi_sinter < 1e-3`) and of the region with `phi > 0.4` (outer face of
 the outermost sintered cell), the time [yr after formation] and value of the peak
-temperature, and the largest relative energy residual of a step.
+temperature, the largest relative energy residual of a step, the relative residual of the
+enthalpy over the run (sum over steps of `V (1 - phi) (h(T_new) - h(T_old))` at the porosity
+of the step against the deposited heat minus the surface loss; it measures the lag of the
+heat capacity) and the melt fraction of `T_max` (zeros without `melt`).
 """
 function solve_porous_sphere(;
     R::Float64,
@@ -224,7 +245,18 @@ function solve_porous_sphere(;
     ratio_al::Float64=RATIO_AL_L16,
     T0::Float64=T_SPACE,
     stop_cold::Bool=true,
+    melt::Union{Nothing,NamedTuple}=nothing,
 )
+    if melt !== nothing
+        melt.T_sol < melt.T_liq ||
+            throw(ArgumentError("melt.T_sol must be below melt.T_liq, got $melt"))
+        h_s =
+            T ->
+                RHOCP_SOL * (T - T0) +
+                RHO_SOL *
+                melt.L_melt *
+                clamp((T - melt.T_sol) / (melt.T_liq - melt.T_sol), 0.0, 1.0)
+    end
     dr = R / Nr
     rf = [(i - 1) * dr for i in 1:(Nr + 1)]
     rc = [(i - 0.5) * dr for i in 1:Nr]
@@ -245,11 +277,16 @@ function solve_porous_sphere(;
     T_max = copy(T)
     t = t_form_yr * YEARLENGTH_S
     t_peak, T_peak, eres, nstep = 0.0, T0, 0.0, 0
+    dH, Q = 0.0, 0.0
     nmax = ceil(Int, t_end_yr / dt_yr)
     for n in 1:nmax
         P = hydrostatic_pressure(phi, R)
         k = [k_porous_ref(K_SOL, p) for p in phi]
-        C = RHOCP_SOL .* (1.0 .- phi)
+        C = if melt === nothing
+            RHOCP_SOL .* (1.0 .- phi)
+        else
+            [rhocp_app_ref(T[i], phi[i]; melt.L_melt, melt.T_sol, melt.T_liq) for i in 1:Nr]
+        end
         H = RHO_BULK .* (1.0 .- phi) .* q_al_step(t, dt, ratio_al)
         # Face conductances: harmonic mean inside, half cell to the Dirichlet surface
         cond = zeros(Nr + 1)
@@ -266,6 +303,12 @@ function solve_porous_sphere(;
         stored = sum(C[i] * V[i] * (Tn[i] - T[i]) for i in 1:Nr)
         source = dt * (sum(H .* V) - cond[Nr + 1] * (Tn[Nr] - T_SPACE))
         eres = max(eres, abs(stored - source) / max(abs(source), abs(stored), eps()))
+        Q += source
+        dH += if melt === nothing
+            stored
+        else
+            sum(V[i] * (1.0 - phi[i]) * (h_s(Tn[i]) - h_s(T[i])) for i in 1:Nr)
+        end
         for i in 1:Nr
             Pb = P[i] * 1.0e-5
             if dphi[i] <= DPHI_SINTERED
@@ -297,6 +340,15 @@ function solve_porous_sphere(;
         T_peak,
         t_stop_yr=t / YEARLENGTH_S - t_form_yr,
         energy_residual=eres,
+        enthalpy_residual=abs(dH - Q) / max(abs(Q), eps()),
+        F_max=if melt === nothing
+            zeros(Nr)
+        else
+            [
+                clamp((Tm - melt.T_sol) / (melt.T_liq - melt.T_sol), 0.0, 1.0) for
+                Tm in T_max
+            ]
+        end,
         n_steps=nstep,
     )
 end
@@ -356,18 +408,22 @@ const SEED_DEFAULT = 42
 
 """
     make_porous_shell_config(; Nx, phi_init, t_form_yr, n_steps, dt_yr,
-                             k_air=nothing, seed=42,
-                             surface_temperature=:fixed) -> SimulationConfig
+                             k_air=nothing, seed=42, surface_temperature=:fixed,
+                             melting=MeltingConfig(; active=false,
+                             soft_turbulence=false)) -> SimulationConfig
 
 Erebus configuration of the porous shell case: a dry planetesimal of radius `R_PLANET`
 in a box of `L_BOX`, spherical metric, 26Al heating from the CAI ratio `RATIO_AL_L16`,
-`porosity.model = :henke2012`, a fixed time step, no melting, reactions or pore water.
+`porosity.model = :henke2012`, a fixed time step, no reactions or pore water, and no
+melting unless `melting` turns it on.
 With `surface_temperature = :fixed` the P nodes outside `R_PLANET` hold the disk
 temperature `T_SPACE`, the surface of the 1-D model, and the nodes inside take their
 properties from the rock markers only. With `:sticky_air` the air stays near `T_SPACE`
 through its heat capacity `RHOCP_AIR`. `k_air = nothing` gives the air the conductivity
 of the cold-pressed surface rock, so that the face between air and rock conducts as the
-rock; pass 3000.0 for the value that a configuration file gives.
+rock; pass 3000.0 for the value that a configuration file gives. `melting` is the
+`[melting]` section; the rock solidus phase temperature `thermodynamics.tmsolidphase`
+follows its rock solidus.
 
 Parameters
 ----------
@@ -387,6 +443,8 @@ seed : Int, optional
     Seed of the marker positions (default `SEED_DEFAULT`).
 surface_temperature : Symbol, optional
     `thermodynamics.surface_temperature`, `:fixed` (default) or `:sticky_air`.
+melting : MeltingConfig, optional
+    The `[melting]` section (default: melting off).
 
 Returns
 -------
@@ -410,6 +468,7 @@ function make_porous_shell_config(;
     k_air::Union{Nothing,Float64}=nothing,
     seed::Int=SEED_DEFAULT,
     surface_temperature::Symbol=:fixed,
+    melting::MeltingConfig=MeltingConfig(; active=false, soft_turbulence=false),
 )::SimulationConfig
     surface_temperature in (:fixed, :sticky_air) || throw(
         ArgumentError(
@@ -459,6 +518,7 @@ function make_porous_shell_config(;
             thermal_buoyancy=false,
             surface_radiation=false,
             surface_temperature=surface_temperature,
+            tmsolidphase=melting.T_solidus[1],
         ),
         materials=MaterialConfig(;
             ksolidm=SVector{3,Float64}([K_SOL, K_SOL, k_a]),
@@ -475,7 +535,7 @@ function make_porous_shell_config(;
             savematstep=n_steps + 10, visstep=n_steps + 10, save_final=false
         ),
         reaction=ReactionConfig(; active=false),
-        melting=MeltingConfig(; active=false, soft_turbulence=false),
+        melting=melting,
         coreformation=CoreFormationConfig(;
             percolation_active=false, settling_active=false
         ),

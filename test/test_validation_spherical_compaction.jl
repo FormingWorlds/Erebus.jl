@@ -881,6 +881,7 @@ end
                             diffusion_bench=empty_bench,
                             momentum_bench=empty_bench,
                             porous_shell_bench=empty_bench,
+                            melting_shell_bench=empty_bench,
                         )
                     end
                 end
@@ -897,6 +898,7 @@ end
                 "spherical_pressure_diffusion",
                 "spherical_momentum",
                 "porous_shell",
+                "melting_shell",
             ]
 
             # Export round trip.
@@ -987,6 +989,7 @@ end
             diffusion_bench=empty_bench,
             momentum_bench=empty_bench,
             porous_shell_bench=empty_bench,
+            melting_shell_bench=empty_bench,
         )
         @test_throws InterruptException run_compaction_validation_check(
             record_path; bench=InterruptingBench()

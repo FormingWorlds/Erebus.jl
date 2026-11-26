@@ -24,6 +24,7 @@ Each case on a page has the same layout:
 | [Spherical Pressure Diffusion](spherical_pressure_diffusion.md) | The poroelastic storage terms of the solid and the fluid continuity rows over 20 time steps, the spherical face weights of the fluid row | Backward-Euler series of pore pressure diffusion in a rigid sphere and disk with a vented surface |
 | [Spherical Momentum](spherical_momentum.md) | How the flow of the solid changes in a slice of a sphere: the weights on the stress, the out-of-plane stress $S_{33}$ and its hoop term, the volumetric trace of the stress, and the stored `S33`, `EII`, `SII` and heating | Exact shear flow around the centre with and without `spherical_flow`, a manufactured flow towards and away from the centre for the momentum equation of the spherical annulus, and a radial compaction flow of a compressible rock for the 3-D equations of a sphere |
 | [Porous Shell](porous_shell.md) | The dry porosity model in the time loop: cold pressing, sintering, the porous conductivity and heat, and the depth of the porous shell | Independent 1-D finite-volume model of a sphere with the same laws, at the same time step |
+| [Melting Shell](melting_shell.md) | Silicate melting with latent heat in the porous shell case: the apparent heat capacity of a marker, the centre peak temperature and the radius of the molten centre | The same 1-D model with the latent heat as an apparent heat capacity, at the same time step |
 
 ## How the results are stored
 
@@ -34,5 +35,5 @@ The Darcy flow, the compaction, the pressure diffusion and the momentum tests sk
 `tools/check_validation.jl` runs every case of its table on every grid and compares it with its record, and the CI job `check_validation` runs it on every pull request.
 To write a new record after an intended physics change, run the export tool for that record.
 The tool also writes the table on the page.
-It refuses to run with uncommitted changes in `src/` or `benchmarks/` (the Darcy flow, the compaction, the pressure diffusion, the momentum and the porous shell tools also check `tools/`).
+It refuses to run with uncommitted changes in `src/` or `benchmarks/` (the Darcy flow, the compaction, the pressure diffusion, the momentum, the porous shell and the melting shell tools also check `tools/`).
 It also refuses to write a value that leaves its regression band (the allowed range around the recorded value), unless you pass `--accept-physics-change`, and a value that fails its reference tolerance in all cases.
