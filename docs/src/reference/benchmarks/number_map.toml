@@ -607,5 +607,10 @@ test_name = "test_melting_shell.jl"
 
 [[entry]]
 page = "validation/melting_shell.md"
+number = "19.5"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
 number = "0.40"
 test_name = "test_melting_shell.jl"

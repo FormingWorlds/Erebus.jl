@@ -513,7 +513,7 @@ end
             @test !ok_l
             @test any(occursin("fails its limit", e) for e in errs_l)
             @test any(occursin("physics regression band", e) for e in errs_l)
-            # A centre 19.5 K high (a run at 0.75 L, measured once) passes the limit,
+            # A centre 19.5 K high passes the limit,
             # but the regression band of 0.382 K catches it
             @test isapprox(MSV.SEED_BAND_CENTRE_TMAX, 0.382; rtol=1e-14)
             hot_metrics = copy(bench.metrics)

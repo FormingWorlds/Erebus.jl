@@ -113,7 +113,7 @@ A latent heat that is too low makes the centre too hot, and the limit leaves roo
 So a latent heat that is too low by a moderate amount can pass the limit of the centre temperature.
 The record catches it: a new run must replay the recorded values and stay inside the physics regression bands.
 The band of the centre temperature is 0.382 K around the recorded value, 3 times its spread over marker seeds.
-A centre 19.5 K above the recorded value stays inside the 20 K limit, and the band catches it.
+A test moves the recorded centre up by 19.5 K, which stays inside the 20 K limit, and the band catches it.
 
 This case cannot see the factor $1 - \phi_d$ on the latent term, where $\phi_d$ is the dry porosity of a marker.
 Rock above the solidus has sintered to almost no porosity, so the factor is 1 to round-off there.
