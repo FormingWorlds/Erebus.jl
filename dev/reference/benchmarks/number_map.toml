@@ -494,3 +494,123 @@ test_name = "test_fixed_surface_temperature.jl"
 page = "explanations/discretization_numerics.md"
 number = "290"
 test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1661.3"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "13130"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "11.6"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "5.9"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "755"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "380"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1.01"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1.42"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.0061"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "16.0"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "89.5"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "46.2"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "4.0"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.0289"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.0481"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.0391"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.04"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.025"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1100"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1.5"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.01"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.382"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "19.5"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.40"
+test_name = "test_melting_shell.jl"
