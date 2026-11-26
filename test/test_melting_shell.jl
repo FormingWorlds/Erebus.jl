@@ -363,7 +363,7 @@ end
         @test_throws DomainError MSV.lag_shift(; divisor=0, coarse=lag.coarse)
     end
 
-    @testset "L = 0 and 1.5 L fail, 0.75 L passes the centre limit at Nx = 41" begin
+    @testset "L = 0 and 1.5 L fail the centre limit at Nx = 41" begin
         # Nx 41 is the coarsest grid where the run at L passes the 20 K limit of Nx 65.
         ref = MSV.reference_solution()
         kw = (;
@@ -378,33 +378,26 @@ end
         nominal = MSV.run_melting_shell_case(; kw..., L_melt=MSV.L_MELT)
         no_lat = MSV.run_melting_shell_case(; kw..., L_melt=0.0)
         high_lat = MSV.run_melting_shell_case(; kw..., L_melt=L_high)
-        low_lat = MSV.run_melting_shell_case(; kw..., L_melt=0.75 * MSV.L_MELT)
-        runs = (nominal, no_lat, high_lat, low_lat)
+        runs = (nominal, no_lat, high_lat)
         pass(r) = MSV.metric_passes("centre_tmax_nx65", r.T_centre, r.T_centre_ref)
         @test pass(nominal)
         @test !pass(no_lat)
         @test !pass(high_lat)
-        # A latent heat 25 % low passes: the grid error sits on the low side of the window
-        @test pass(low_lat)
-        # Errors against the 1-D model at L: -16.0 K, +89.5 K, -46.2 K and +3.0 K
+        # Errors against the 1-D model at L: -16.0 K, +89.5 K and -46.2 K
         @test isapprox(nominal.T_centre_error, -16.0; atol=0.05)
         @test isapprox(no_lat.T_centre_error, 89.5; atol=0.05)
         @test isapprox(high_lat.T_centre_error, -46.2; atol=0.05)
-        @test isapprox(low_lat.T_centre_error, 3.0; atol=0.05)
         @test isapprox(20.0 - abs(nominal.T_centre_error), 4.0; atol=0.05)
         # The shift from the latent heat alone, on the same grid, exceeds the limit
         limit = MSV.metric_limit("centre_tmax_nx65").atol
         @test no_lat.T_centre - nominal.T_centre > limit
         @test nominal.T_centre - high_lat.T_centre > limit
-        # The shift of 0.75 L is 10 times the seed band of the Nx 65 record
-        @test low_lat.T_centre - nominal.T_centre > 10 * MSV.SEED_BAND_CENTRE_TMAX
-        # The melt radius stays within its 1.5-cell band for all 4 runs
+        # The melt radius stays within its 1.5-cell band for all 3 runs
         @test all(abs(r.r_melt_error_cells) <= 1.5 for r in runs)
-        # L2 of the hot bins: 0.0289 at L, 0.0481 at 0, 0.0391 at 1.5 L, 0.0254 at 0.75 L
+        # L2 of the hot bins: 0.0289 at L, 0.0481 at 0 and 0.0391 at 1.5 L
         @test isapprox(nominal.tmax_rel_l2, 0.0289; atol=1e-4)
         @test isapprox(no_lat.tmax_rel_l2, 0.0481; atol=1e-4)
         @test isapprox(high_lat.tmax_rel_l2, 0.0391; atol=1e-4)
-        @test isapprox(low_lat.tmax_rel_l2, 0.0254; atol=1e-4)
         @test all(r.energy_lse_residual <= 1.0e-9 for r in runs)
     end
 

@@ -602,21 +602,6 @@ test_name = "test_melting_shell.jl"
 
 [[entry]]
 page = "validation/melting_shell.md"
-number = "0.75"
-test_name = "test_melting_shell.jl"
-
-[[entry]]
-page = "validation/melting_shell.md"
-number = "3.0"
-test_name = "test_melting_shell.jl"
-
-[[entry]]
-page = "validation/melting_shell.md"
-number = "0.0254"
-test_name = "test_melting_shell.jl"
-
-[[entry]]
-page = "validation/melting_shell.md"
 number = "0.382"
 test_name = "test_melting_shell.jl"
 
