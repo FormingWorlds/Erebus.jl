@@ -1722,12 +1722,13 @@ end
                     momentum_bench=bench,
                     porous_shell_bench=empty_bench,
                     melting_shell_bench=empty_bench,
+                    magma_ocean_conductivity_bench=empty_bench,
                 ),
             )
             @test no_arg.value == 1
             @test occursin("spherical_momentum.toml", no_arg.out)
             @test occursin("[reproducibility]", no_arg.err)
-            @test VALIDATION_CASES[end - 2].id == "spherical_momentum"
+            @test VALIDATION_CASES[end - 3].id == "spherical_momentum"
 
             exported = joinpath(tmpdir, "exported.toml")
             commit = String(raw_record["metadata"]["src_commit"])

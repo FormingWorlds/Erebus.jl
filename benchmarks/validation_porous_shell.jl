@@ -139,12 +139,12 @@ end
 """
 Sintered porosity after `dt` [s] at fixed `P_bar` and `T`, from the exact solution of
 d phi / dt = -r(phi): the phi with sinter_time_ref(phi, phi_n) = dt, by bisection in
-ln(phi) on [1e-7, phi_n]. Porosity below 1e-7 does not change.
+ln(phi) on [1e-7, phi_n]. Porosity at or below 1e-7 does not change.
 """
 function sinter_step_ref(
     phi::Float64, phi0::Float64, P_bar::Float64, T::Float64, dt::Float64
 )
-    (phi < 1.0e-7 || sinter_rate_ref(phi, phi0, P_bar, T) * dt <= 0.0) && return phi
+    (phi <= 1.0e-7 || sinter_rate_ref(phi, phi0, P_bar, T) * dt <= 0.0) && return phi
     sinter_time_ref(1.0e-7, phi, phi0, P_bar, T) <= dt && return 1.0e-7
     lo, hi = log(1.0e-7), log(phi)
     for _ in 1:60
@@ -212,9 +212,77 @@ function rhocp_app_ref(T, phi; L_melt, T_sol, T_liq)
 end
 
 """
+    eta_num_ref(F; soft_turb) -> Float64
+
+Solver-clamped melt-weakened silicate viscosity [Pa s] at melt fraction `F` from the raw
+constants of `soft_turb`: exponential below `phi_crit`, log-linear to `eta_melt` above,
+clamped to `[eta_min, eta_max]`.
+"""
+function eta_num_ref(F::Float64; soft_turb::NamedTuple)::Float64
+    Fc = clamp(F, 0.0, 1.0)
+    st = soft_turb
+    iszero(Fc) && return clamp(st.eta_solid, st.eta_min, st.eta_max)
+    if Fc < st.phi_crit
+        return clamp(st.eta_solid * exp(-st.alpha_eta * Fc), st.eta_min, st.eta_max)
+    end
+    eta_c = st.eta_solid * exp(-st.alpha_eta * st.phi_crit)
+    frac = (Fc - st.phi_crit) / (1.0 - st.phi_crit)
+    return clamp(
+        exp((1.0 - frac) * log(eta_c) + frac * log(st.eta_melt)), st.eta_min, st.eta_max
+    )
+end
+
+"""
+    k_soft_turb_ref(k_lattice, T; soft_turb) -> Float64
+
+Effective thermal conductivity [W/(m K)] of porous or sintered silicate rock with base
+conductivity `k_lattice` [W/(m K)] at temperature `T` [K], coded from the raw parameters
+of `soft_turb` without calling `Erebus` routines.
+
+# Throws
+
+    - `DomainError`: if `k_lattice` or `turb_exponent` is not positive and finite, `T` is
+      not finite, or `F_start >= F_end`
+"""
+function k_soft_turb_ref(k_lattice::Float64, T::Float64; soft_turb::NamedTuple)::Float64
+    st = soft_turb
+    (isfinite(k_lattice) && k_lattice > 0.0) ||
+        throw(DomainError(k_lattice, "k_lattice must be positive and finite"))
+    isfinite(T) || throw(DomainError(T, "T must be finite"))
+    (isfinite(st.turb_exponent) && st.turb_exponent > 0.0) ||
+        throw(DomainError(st.turb_exponent, "turb_exponent must be positive and finite"))
+    (0.0 <= st.F_start < st.F_end <= 1.0) ||
+        throw(DomainError((st.F_start, st.F_end), "require 0 <= F_start < F_end <= 1"))
+    (isfinite(st.dT_min) && st.dT_min > 0.0) ||
+        throw(DomainError(st.dT_min, "dT_min must be positive and finite"))
+    (isfinite(st.T_sol) && isfinite(st.T_liq) && st.T_sol < st.T_liq) ||
+        throw(DomainError((st.T_sol, st.T_liq), "require finite T_sol < T_liq"))
+    st.enabled || return k_lattice
+    F = clamp((T - st.T_sol) / (st.T_liq - st.T_sol), 0.0, 1.0)
+    eta_num = eta_num_ref(F; soft_turb=st)
+    eta_fl = if F <= st.F_start
+        eta_num
+    else
+        xi = clamp((F - st.F_start) / (st.F_end - st.F_start), 0.0, 1.0)
+        exp((1.0 - xi) * log(eta_num) + xi * log(st.eta_fluid_sil))
+    end
+    u = clamp((F - st.F_start) / (st.F_end - st.F_start), 0.0, 1.0)
+    w_F = u * u * (3.0 - 2.0 * u)
+    w_T = clamp(max(0.0, T - st.T_surf) / st.dT_min, 0.0, 1.0)^2
+    w_tot = w_F * w_T
+    w_tot <= 0.0 && return max(k_lattice, clamp(k_lattice, st.k_floor, st.k_cutoff))
+    k_turb = max(
+        k_lattice,
+        clamp(k_lattice * (eta_num / eta_fl)^st.turb_exponent, st.k_floor, st.k_cutoff),
+    )
+    log_k = (1.0 - w_tot) * log10(k_lattice) + w_tot * log10(k_turb)
+    return max(k_lattice, clamp(10.0^log_k, st.k_floor, st.k_cutoff))
+end
+
+"""
     solve_porous_sphere(; R, phi_init, t_form_yr, t_end_yr, dt_yr, Nr=2000,
                         ratio_al=RATIO_AL_L16, T0=T_SPACE, stop_cold=true,
-                        melt=nothing) -> NamedTuple
+                        melt=nothing, soft_turb=nothing) -> NamedTuple
 
 One-dimensional spherical finite-volume run: backward Euler conduction with k, rho cp and
 heat from the porosity at the start of the step, Dirichlet `T_SPACE` at `R`, then the dry
@@ -225,15 +293,18 @@ and every cell is below `T_SINTER` (no further sintering).
 With `melt = (; L_melt, T_sol, T_liq)` the heat capacity of the step is `rhocp_app_ref` at
 the temperature of the step start (the Erebus order): it adds the latent heat
 `RHO_SOL L_melt / (T_liq - T_sol)` for `T_sol < T < T_liq`, times `1 - phi`.
+With `soft_turb` (a `NamedTuple` for `k_soft_turb_ref`) each cell takes the regularized
+effective conductivity of convecting melt at the temperature of the step start.
 
 Returns `(; r, phi, phi0, dphi_sinter, T, T_max, d_shell, d_phi04, t_peak_yr, T_peak,
-t_stop_yr, energy_residual, enthalpy_residual, F_max, n_steps)`: profiles at the cell centres, the depth [m] of the
+t_stop_yr, energy_residual, enthalpy_residual, F_max, k_max, n_steps)`: profiles at the cell centres, the depth [m] of the
 unsintered shell (`dphi_sinter < 1e-3`) and of the region with `phi > 0.4` (outer face of
 the outermost sintered cell), the time [yr after formation] and value of the peak
 temperature, the largest relative energy residual of a step, the relative residual of the
 enthalpy over the run (sum over steps of `V (1 - phi) (h(T_new) - h(T_old))` at the porosity
 of the step against the deposited heat minus the surface loss; it measures the lag of the
-heat capacity) and the melt fraction of `T_max` (zeros without `melt`).
+heat capacity), the melt fraction of `T_max` (zeros without `melt`), and the largest cell
+conductivity `k_max` [W/(m K)].
 """
 function solve_porous_sphere(;
     R::Float64,
@@ -246,6 +317,7 @@ function solve_porous_sphere(;
     T0::Float64=T_SPACE,
     stop_cold::Bool=true,
     melt::Union{Nothing,NamedTuple}=nothing,
+    soft_turb::Union{Nothing,NamedTuple}=nothing,
 )
     if melt !== nothing
         melt.T_sol < melt.T_liq ||
@@ -256,6 +328,14 @@ function solve_porous_sphere(;
                 RHO_SOL *
                 melt.L_melt *
                 clamp((T - melt.T_sol) / (melt.T_liq - melt.T_sol), 0.0, 1.0)
+    end
+    fmode = soft_turb === nothing ? :harmonic : get(soft_turb, :face_mode, :harmonic)
+    fmode in (:harmonic, :arithmetic) ||
+        throw(ArgumentError("face_mode must be :harmonic or :arithmetic, got $fmode"))
+    if melt !== nothing && soft_turb !== nothing && soft_turb.enabled
+        (melt.T_sol == soft_turb.T_sol && melt.T_liq == soft_turb.T_liq) || throw(
+            ArgumentError("melt and soft_turb must use the same T_sol and T_liq bounds")
+        )
     end
     dr = R / Nr
     rf = [(i - 1) * dr for i in 1:(Nr + 1)]
@@ -276,22 +356,34 @@ function solve_porous_sphere(;
     T = fill(T0, Nr)
     T_max = copy(T)
     t = t_form_yr * YEARLENGTH_S
-    t_peak, T_peak, eres, nstep = 0.0, T0, 0.0, 0
+    t_peak, T_peak, eres, k_max, nstep = 0.0, T0, 0.0, 0.0, 0
     dH, Q = 0.0, 0.0
     nmax = ceil(Int, t_end_yr / dt_yr)
     for n in 1:nmax
         P = hydrostatic_pressure(phi, R)
-        k = [k_porous_ref(K_SOL, p) for p in phi]
+        k = if soft_turb === nothing
+            [k_porous_ref(K_SOL, p) for p in phi]
+        else
+            [
+                k_soft_turb_ref(k_porous_ref(K_SOL, phi[i]), T[i]; soft_turb=soft_turb)
+                for i in 1:Nr
+            ]
+        end
+        k_max = max(k_max, maximum(k))
         C = if melt === nothing
             RHOCP_SOL .* (1.0 .- phi)
         else
             [rhocp_app_ref(T[i], phi[i]; melt.L_melt, melt.T_sol, melt.T_liq) for i in 1:Nr]
         end
         H = RHO_BULK .* (1.0 .- phi) .* q_al_step(t, dt, ratio_al)
-        # Face conductances: harmonic mean inside, half cell to the Dirichlet surface
+        # Face conductances: harmonic mean inside (or arithmetic when requested), half cell at R
         cond = zeros(Nr + 1)
         for i in 2:Nr
-            cond[i] = A[i] / (0.5 * dr / k[i - 1] + 0.5 * dr / k[i])
+            cond[i] = if fmode === :harmonic
+                A[i] / (0.5 * dr / k[i - 1] + 0.5 * dr / k[i])
+            else
+                A[i] * 0.5 * (k[i - 1] + k[i]) / dr
+            end
         end
         cond[Nr + 1] = A[Nr + 1] * k[Nr] / (0.5 * dr)
         d = [C[i] * V[i] / dt + cond[i] + cond[i + 1] for i in 1:Nr]
@@ -349,6 +441,7 @@ function solve_porous_sphere(;
                 Tm in T_max
             ]
         end,
+        k_max,
         n_steps=nstep,
     )
 end

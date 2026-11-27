@@ -99,6 +99,30 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1029/2008GC002138](https://doi.org/10.1029/2008GC002138)  
   *Rheological weakening parameterization and viscosity reduction across the solid-liquid silicate transition.*
 
+- **McKenzie, D. (1984)**. The generation and compaction of partially molten rock. *Journal of Petrology*, 25(3), 713-765.  
+  [https://doi.org/10.1093/petrology/25.3.713](https://doi.org/10.1093/petrology/25.3.713)  
+  *Two-phase viscous matrix compaction, Darcy melt percolation, and porosity-permeability power-law relations in partially molten silicates.*
+
+- **Richardson, J. F., & Zaki, W. N. (1954)**. Sedimentation and fluidisation: Part I. *Transactions of the Institution of Chemical Engineers*, 32, 35-53 (reprinted in *Chemical Engineering Research and Design*, 75, S82-S100, 1997).  
+  [https://doi.org/10.1016/S0263-8762(97)80006-8](https://doi.org/10.1016/S0263-8762(97)80006-8)  
+  *Empirical power-law hindered-settling velocity relation for concentrated crystal suspensions.*
+
+- **Siggia, E. D. (1994)**. High Rayleigh number convection. *Annual Review of Fluid Mechanics*, 26, 137-168.  
+  [https://doi.org/10.1146/annurev.fl.26.010194.001033](https://doi.org/10.1146/annurev.fl.26.010194.001033)  
+  *Asymptotic Nusselt-Rayleigh scaling laws and boundary-layer dynamics in turbulent thermal convection.*
+
+- **Solomatov, V. S., & Stevenson, D. J. (1993)**. Suspension in convective layers and style of differentiation of a terrestrial magma ocean. *Journal of Geophysical Research: Planets*, 98(E3), 5375-5390.  
+  [https://doi.org/10.1029/92JE02948](https://doi.org/10.1029/92JE02948)  
+  *Convective heat transport, crystal suspension, and thermal buffering in planetary magma oceans.*
+
+- **Solomatov, V. S. (2007)**. Magma Oceans and Primordial Mantle Differentiation. In *Treatise on Geophysics* (Vol. 9, pp. 91-119). Elsevier.  
+  [https://doi.org/10.1016/B978-044452748-6.00141-3](https://doi.org/10.1016/B978-044452748-6.00141-3)  
+  *Soft-turbulence convective heat flux scaling ($F \propto \mathrm{Ra}^{1/3} \propto \eta^{-1/3}$) and rheological disaggregation of silicate magma oceans.*
+
+- **Solomatov, V. S. (2015)**. Magma Oceans and Primordial Mantle Differentiation. In *Treatise on Geophysics* (2nd ed., Vol. 9, pp. 81-104). Elsevier.  
+  [https://doi.org/10.1016/B978-0-444-53802-4.00155-X](https://doi.org/10.1016/B978-0-444-53802-4.00155-X)  
+  *Updated synthesis of magma-ocean rheology, soft-turbulence convective heat flux, crystal suspension, and solidification regimes.*
+
 ---
 
 ## Volatile Degassing, Solubility, and Retention

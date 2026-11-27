@@ -57,6 +57,7 @@ makedocs(;
             "Spherical Momentum" => "validation/spherical_momentum.md",
             "Porous Shell" => "validation/porous_shell.md",
             "Melting Shell" => "validation/melting_shell.md",
+            "Magma Ocean Conductivity" => "validation/magma_ocean_conductivity.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

@@ -484,7 +484,7 @@ end
         @test isempty(errs)
         @test run_melting_shell_validation_check(MS_RECORD; bench=bench)
         @test run_validation_cli(["--check", MS_RECORD]; melting_shell_bench=bench) == 0
-        @test last(VALIDATION_CASES).id == "melting_shell"
+        @test VALIDATION_CASES[end - 1].id == "melting_shell"
         raw = TOML.parsefile(MS_RECORD)
         @test [String(m["id"]) for m in raw["metrics"]] == collect(MSV.EXPECTED_METRIC_IDS)
         @test [Int(m["nx"]) for m in raw["metrics"]] == [65, 65, 65, 65, 0]
