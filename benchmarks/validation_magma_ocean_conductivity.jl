@@ -202,6 +202,14 @@ inside `r_core`, linear ramp to `T_SPACE` at `R_PLANET`) over one step `dt_yr` [
 without radiogenic heating, quantifying the step-1 explicit `Q_metric` cooling against the
 2-D solve with `Q_metric = 0` and the 1-D implicit spherical step.
 
+# Arguments
+
+- `Nx`: basic grid nodes per side of the 2-D square domain.
+- `r_core`: radius [m] of the isothermal molten core (`T = T_core` inside `r_core`).
+- `T_core`: initial temperature [K] inside `r_core`.
+- `dt_yr`: single time-step duration [yr].
+- `Nr`: radial cell count of the implicit 1-D spherical comparison step.
+
 # Returns
 
 `(; k_core_max, min_dT_metric, T_centre_2d_sph, T_centre_2d_no_metric, T_centre_1d)`.
@@ -247,8 +255,6 @@ function hot_core_metric_step_check(;
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     Z = zeros(Ny1, Nx1)
     Q = zeros(Ny1, Nx1)
-    RT_sph = zeros(Ny1 * Nx1)
-    RT_no = zeros(Ny1 * Nx1)
     Erebus.compute_spherical_metric_heat_source!(
         Q,
         g.tk1,
@@ -260,38 +266,27 @@ function hot_core_metric_step_check(;
         rplanet=R,
         reg_cells=cfg.geometry.metric_regularization_cells,
     )
-    LT_sph = Erebus.assemble_thermal_lse!(
-        g.tk1,
-        g.RHOCP,
-        g.KX,
-        g.KY,
-        Z,
-        Z,
-        Z,
-        Z,
-        RT_sph,
-        dt_s;
-        coords=coords,
-        Q_metric=Q,
-        fixed=g.fixed_tk,
-    )
-    tk_sph = reshape(LT_sph.cscmatrix \ RT_sph, Ny1, Nx1)
-    LT_no = Erebus.assemble_thermal_lse!(
-        g.tk1,
-        g.RHOCP,
-        g.KX,
-        g.KY,
-        Z,
-        Z,
-        Z,
-        Z,
-        RT_no,
-        dt_s;
-        coords=coords,
-        Q_metric=Z,
-        fixed=g.fixed_tk,
-    )
-    tk_no = reshape(LT_no.cscmatrix \ RT_no, Ny1, Nx1)
+    function _solve_2d_step(q_metric::Matrix{Float64})
+        rhs_2d = zeros(Ny1 * Nx1)
+        lt = Erebus.assemble_thermal_lse!(
+            g.tk1,
+            g.RHOCP,
+            g.KX,
+            g.KY,
+            Z,
+            Z,
+            Z,
+            Z,
+            rhs_2d,
+            dt_s;
+            coords=coords,
+            Q_metric=q_metric,
+            fixed=g.fixed_tk,
+        )
+        return reshape(lt.cscmatrix \ rhs_2d, Ny1, Nx1)
+    end
+    tk_sph = _solve_2d_step(Q)
+    tk_no = _solve_2d_step(Z)
     ic = (Nx + 1) ÷ 2
     min_dT_qm = minimum([
         Q[i, j] * dt_s / g.RHOCP[i, j] for
@@ -439,7 +434,7 @@ the same time step and run duration.
 
 `(; dx, T_centre, T_centre_ref, T_centre_error, plateau_drop, plateau_drop_ref, r_mush,
 r_mush_ref, r_mush_error_cells, r_melt, r_melt_ref, r_melt_error_cells, tmax_rel_l2,
-energy_lse_residual, enthalpy_residual_ref, T_peak, r, tmax, tmax_ref, reference)`.
+energy_lse_residual, enthalpy_residual_ref, T_peak, T_min_grid, r, tmax, tmax_ref, reference)`.
 """
 function run_magma_ocean_case(;
     Nx::Int,

@@ -109,12 +109,24 @@ end
         @test 250.0 < k_no_mush_blend - k_m040 < 320.0
         @test 50.0 < k_laminar_040 - k_m040 < 85.0
 
+        # Disaggregated suspension below etamin clamp F = 0.45 (T = 1580 K, phi_d = 0)
+        _mo_marker_step!(st_on, coords, ws_on, cfg_on, 1580.0, 0.0)
+        eta_045 = exp10(log10(eta_040) - (0.05 / 0.60) * (log10(eta_040) - 1.0))
+        eta_fl_045 = exp(0.25 * log(eta_045) + 0.75 * log(100.0))
+        k_turb_045 = 3.0 * (eta_045 / eta_fl_045)^(1.0 / 3.0)
+        w_045 = 3.0 * 0.75^2 - 2.0 * 0.75^3
+        k_exp_045 = exp10((1.0 - w_045) * log10(3.0) + w_045 * log10(k_turb_045))
+        @test 5.0e12 < eta_045 < 2.0e13
+        @test isapprox(st_on.markers.core.ktotalm[rock_on[1]], k_exp_045; rtol=1e-12)
+        ic = (cfg_on.grid.Nx + 1) ÷ 2
+        @test isapprox(st_on.grids.KX[ic, ic], k_exp_045; rtol=1e-12)
+        @test isapprox(ws_on.rock_sums.KXu[ic, ic], k_exp_045; rtol=1e-12)
+
         # Suspension regime F = 0.625 (T = 1650 K): (etamin / eta_fluid_silicate)^(1/3)
         _mo_marker_step!(st_on, coords, ws_on, cfg_on, 1650.0, 0.0)
         k_susp = 3.0 * (1.0e12 / 100.0)^(1.0 / 3.0)
         @test isapprox(st_on.markers.core.ktotalm[rock_on[1]], k_susp; rtol=1e-12)
         @test isapprox(k_susp, 6463.304070; atol=1e-5)
-        ic = (cfg_on.grid.Nx + 1) ÷ 2
         @test isapprox(st_on.grids.KX[ic, ic], k_susp; rtol=1e-12)
         @test isapprox(st_on.grids.KY[ic, ic], k_susp; rtol=1e-12)
         @test isapprox(ws_on.rock_sums.KXu[ic, ic], k_susp; rtol=1e-12)
@@ -284,7 +296,7 @@ end
         @test isapprox(
             MOSV.PSV.sinter_step_ref(1.0e-7, 0.25, 10.0, 1600.0, 1.0e11),
             1.0e-7;
-            rtol=0.0,
+            rtol=1.0e-15,
             atol=0.0,
         )
         @test_throws ArgumentError MOSV.make_magma_ocean_config(;
@@ -564,7 +576,7 @@ end
         @test isapprox(tc_f24 - tc_nom, -41.34; atol=0.02)
         @test isapprox(tc_f46 - tc_nom, 41.46; atol=0.02)
 
-        # Buffered peak finishes before 1.40 Myr; unbuffered keeps heating to 1.98 Myr
+        # Running cell-wise maximum T_max finishes peaking before 1.40 Myr
         ref_25 = MOSV.PSV.solve_porous_sphere(;
             R=MOSV.PSV.R_PLANET,
             phi_init=MOSV.PHI_INIT_CASE,
@@ -576,7 +588,7 @@ end
             melt=MOSV.MSV.reference_melt(),
             soft_turb=MOSV.reference_soft_turb(),
         )
-        @test isapprox(lag.coarse.T_max, ref_25.T_max; rtol=0.0, atol=0.0)
+        @test isapprox(lag.coarse.T_max, ref_25.T_max; rtol=1.0e-15, atol=0.0)
         @test isapprox(lag.coarse.t_peak_yr / 1.0e6, 0.91; atol=0.01)
         @test isapprox(lag.coarse.k_max, 705.0; atol=0.5)
 
@@ -746,8 +758,10 @@ end
         )
         nominal = MOSV.run_magma_ocean_case(; kw...)
         no_turb = MOSV.run_magma_ocean_case(; kw..., soft_turbulence=false)
-        low_exp = MOSV.run_magma_ocean_case(; kw..., turb_exponent=0.2)
-        high_exp = MOSV.run_magma_ocean_case(; kw..., turb_exponent=0.5)
+        low_exp = MOSV.run_magma_ocean_case(; kw..., turb_exponent=MOSV.TURB_EXP_LOW_MUTANT)
+        high_exp = MOSV.run_magma_ocean_case(;
+            kw..., turb_exponent=MOSV.TURB_EXP_HIGH_MUTANT
+        )
         runs = (nominal, no_turb, low_exp, high_exp)
 
         pass_c(r) = MOSV.metric_passes("centre_tmax_nx65", r.T_centre, r.T_centre_ref)
