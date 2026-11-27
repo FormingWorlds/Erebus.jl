@@ -1,6 +1,10 @@
 # Silicate Rock Melting and Magma Ocean Dynamics
 
-This page explains the physical formulations, constitutive equations, and numerical regularizations for silicate rock melting and sub-grid magma ocean convection in `Erebus.jl`.
+How does `Erebus.jl` treat rock that melts, and how does it carry the heat of a convecting magma ocean that its grid cannot resolve?
+Rock melts linearly between a solidus and a liquidus, and the latent heat enters the heat equation as a larger apparent heat capacity inside that interval.
+Melt lowers the rock viscosity, while the Stokes-Darcy flow solver keeps viscosity above a numerical floor, so the grid cannot resolve thin convective boundary layers in liquid magma.
+A regularized effective thermal conductivity on molten markers stands for this sub-grid convective heat transport.
+The sections below give the constitutive equations, the smoothing regularizations, and the configuration parameters.
 
 ---
 
@@ -60,7 +64,7 @@ Input validation asserts finite, strictly positive temperatures and valid pressu
 ### 3. Latent Heat Buffering via Apparent Heat Capacity
 
 Phase transitions absorb or release latent heat of fusion $L_m \approx 4.0\times 10^5\text{ J/kg}$.
-`Erebus.jl` incorporates latent heat buffering through the apparent heat capacity method (Gerya, 2019, Section 16.6):
+`Erebus.jl` incorporates latent heat buffering through the apparent heat capacity method ([Gerya, 2019](../reference/bibliography.md#Primary-References), Section 16.6):
 
 $$\rho c_{p,\text{eff}} = \rho c_p + \rho_s L_m \frac{\partial F_m}{\partial T}$$
 
@@ -77,12 +81,15 @@ Erebus takes the heat capacity at the temperature of the start of each step and 
 A cell that enters or leaves the interval within a step therefore takes the latent heat one step late, and its total latent heat can differ from $\rho_s L_m$ by up to the latent heat of one step.
 This lag is an enthalpy error of first order in the time step, as the section on [thermal subcycles](discretization_numerics.md#3.-Thermal-Subcycles-and-Temperature-Change-Limit) explains.
 
+**Where this is checked.**
+Latent heat buffering in the complete time loop is checked on the [Melting Shell](../validation/melting_shell.md) validation page.
+
 ---
 
 ## Magma Suspension Rheology
 
 The effective viscosity of partially molten rock depends strongly on the silicate melt fraction $F_m$.
-`Erebus.jl` implements a two-regime rheological model based on Costa et al. (2009) and Gerya (2019, Section 16.6.2).
+`Erebus.jl` implements a two-regime rheological model based on [Costa et al. (2009)](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology) and [Gerya (2019, Section 16.6.2)](../reference/bibliography.md#Primary-References).
 
 ### 1. Partially Molten Regime ($F_m < \phi_{\text{crit}}$)
 
@@ -129,24 +136,25 @@ Without a sub-grid model, resolved advection cannot carry the heat flux, causing
 
 ### 2. Convective Heat Flux Parameterization
 
-Following Solomatov (2007) and boundary-layer scaling theory for turbulent convection (Kraichnan 1962; Solomatov & Stevenson 1993), the convective heat flux $F_{\text{conv}}$ scales inversely with fluid viscosity:
+Following [Solomatov (2007)](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology), [Solomatov (2015)](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology), and boundary-layer scaling theory for turbulent convection ([Kraichnan, 1962](../reference/bibliography.md#Hydrothermal-Convection-and-Fluid-Transport); [Solomatov and Stevenson, 1993](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology); [Siggia, 1994](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology)), the convective heat flux $F_{\text{conv}}$ scales inversely with fluid viscosity:
 
 $$F_{\text{conv}} \propto \left(\frac{1}{\eta}\right)^\beta$$
 
-Because the numerical Stokes solver enforces an artificial viscosity floor, $\eta_{\text{num}} \ge \eta_{\min} \gg \eta_{\text{fluid}}$, the missing convective heat transport is represented as an effective turbulent thermal conductivity $k_{\text{turb}}$:
+Because the numerical Stokes solver enforces an artificial viscosity floor, $\eta_{\text{num}} \ge \eta_{\min} \gg \eta_{\text{fluid}}$, the missing convective heat transport is represented on each rock marker as an effective turbulent thermal conductivity $k_{\text{turb}}$, clamped to admissible bounds $[k_{\text{floor}}, k_{\text{cutoff}}]$ and bounded below by $k_{\text{cond}}$:
 
-$$k_{\text{turb}} = k_{\text{cond}} \left(\frac{\eta_{\text{num}}}{\eta_{\text{fluid}}}\right)^\beta$$
+$$k_{\text{turb}} = \max\left(k_{\text{cond}}, \, \text{clamp}\left(k_{\text{cond}} \left(\frac{\eta_{\text{num}}}{\eta_{\text{fluid}}}\right)^\beta, \, k_{\text{floor}}, \, k_{\text{cutoff}}\right)\right)$$
 
 | Parameter | Symbol | Default Value | Physical Meaning |
 |:---|:---|:---|:---|
-| Background conductivity | $k_{\text{cond}}$ | $3.0\text{ W}/(\text{m}\cdot\text{K})$ | Solid silicate lattice conductivity |
-| Numerical viscosity | $\eta_{\text{num}}$ | $\ge 10^{12}\text{ Pa}\cdot\text{s}$ | Viscosity evaluated on the numerical grid |
-| Magma fluid viscosity | $\eta_{\text{fluid}}$ | $100.0\text{ Pa}\cdot\text{s}$ | True physical liquid silicate viscosity |
-| Turbulent scaling exponent | $\beta$ | $1/3 \approx 0.3333$ | Solomatov (2007) soft turbulence exponent |
+| Background conductivity | $k_{\text{cond}}$ | $3.0\text{ W}/(\text{m}\cdot\text{K})$ at $\phi_d = 0$ | Marker porous rock conductivity (`k_porous(k_solid, phi_dry)` on `henke2012`, or `ktotal` with pore fluid) |
+| Numerical marker viscosity | $\eta_{\text{num}}$ | $\ge 10^{12}\text{ Pa}\cdot\text{s}$ | Solver-clamped melt-weakened rock marker viscosity (`etatotalm`, using `etasolidmm` above `tmsolidphase`) |
+| Reference fluid viscosity | $\eta_{\text{fluid}}$ | $\eta_{\text{num}} \to 100.0\text{ Pa}\cdot\text{s}$ | Mush-blended silicate liquid viscosity (`melting.eta_fluid_silicate` above $F_{\text{end}}$) |
+| Turbulent scaling exponent | $\beta$ | $1/3 \approx 0.3333$ | Soft-turbulence Rayleigh scaling exponent ([Solomatov, 2007](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology); [Solomatov, 2015](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology)) |
+| Conductivity bounds | $[k_{\text{floor}}, k_{\text{cutoff}}]$ | $[10^{-3}, 10^6]\text{ W}/(\text{m}\cdot\text{K})$ | Numerical floor (`melting.k_turb_floor`) and cap (`melting.k_turb_cutoff`) |
 
 The scaling exponent $\beta = 1/3$ derives from asymptotic boundary layer theory in the soft turbulence regime, where convective heat transport is governed by boundary layer instability.
-An exponent of $\beta = 1/2$ corresponds to classical laminar boundary layer parameterizations, such as that employed in `i2elvis` (Gerya 2019).
-`Erebus.jl` supports arbitrary user-configured exponents via the `turb_exponent` setting in TOML configurations.
+An exponent of $\beta = 1/2$ corresponds to square-root viscosity parameterizations, such as that employed in `i2elvis` ([Gerya, 2019](../reference/bibliography.md#Primary-References)).
+`Erebus.jl` supports user-configured exponents via `melting.turb_exponent`.
 
 ---
 
@@ -168,49 +176,55 @@ This step change introduces three severe numerical pathologies:
 
 Conductivity is blended continuously over a finite melt transition interval $[F_{\text{start}}, F_{\text{end}}] = [0.30, 0.50]$ using a Hermite cubic smoothstep function:
 
-$$\xi = \text{clamp}\left( \frac{F_m - F_{\text{start}}}{F_{\text{end}} - F_{\text{start}}}, 0.0, 1.0 \right)$$
+$$\xi_F = \text{clamp}\left( \frac{F_m - F_{\text{start}}}{F_{\text{end}} - F_{\text{start}}}, 0.0, 1.0 \right)$$
 
-$$w_F(\xi) = 3 \xi^2 - 2 \xi^3$$
+$$w_F(\xi_F) = 3 \xi_F^2 - 2 \xi_F^3$$
 
-The function $w_F(\xi)$ satisfies $w_F(0) = 0$, $w_F(1) = 1$, and possesses vanishing first derivatives at both boundaries:
+The weight $w_F(\xi_F)$ satisfies $w_F(0) = 0$, $w_F(1) = 1$, and has vanishing first derivatives at both endpoints:
 
-$$\left.\frac{dw_F}{d\xi}\right|_{\xi=0} = 0, \qquad \left.\frac{dw_F}{d\xi}\right|_{\xi=1} = 0$$
+$$\left.\frac{dw_F}{d\xi_F}\right|_{\xi_F=0} = 0, \qquad \left.\frac{dw_F}{d\xi_F}\right|_{\xi_F=1} = 0$$
 
-This property yields $C^1$ smoothness of the effective thermal conductivity at both solid and liquid transition thresholds.
+This gives $C^1$ smoothness of $k_{\text{eff}}(F_m)$ at the onset $F_m = F_{\text{start}} = 0.30$.
+At three higher melt fractions the viscosities change slope: $F_m = \phi_{\text{crit}} = 0.40$, the $\eta_{\min}$ clamp near $F_m \approx 0.498$ at default parameters, and $F_m = F_{\text{end}} = 0.50$.
+At these points $k_{\text{eff}}(F_m)$ stays continuous ($C^0$) and non-decreasing, with bounded piecewise-continuous derivatives.
+The validation pages use "mush" in a narrower sense than the planetesimal differentiation overview above: there, the mush is rock whose peak melt fraction exceeds $F_{\text{start}}$, where the soft-turbulence conductivity begins to rise, and the mush radius is its outer boundary.
 
 ### 2. Logarithmic Geometric Interpolation
 
 Because thermal conductivity varies over several orders of magnitude between conduction ($3\text{ W}/(\text{m}\cdot\text{K})$) and turbulent convection ($10^3\text{ to }10^5\text{ W}/(\text{m}\cdot\text{K})$), linear interpolation produces steep gradients.
-`Erebus.jl` blends conductivity logarithmically:
+`Erebus.jl` blends conductivity logarithmically and enforces both the floor/cutoff bounds and the lower bound $k_{\text{cond}}$:
 
-$$\log_{10} k_{\text{eff}} = (1 - w_{\text{total}}) \log_{10} k_{\text{cond}} + w_{\text{total}} \log_{10} k_{\text{turb}}$$
+$$\log_{10} \tilde{k} = (1 - w_{\text{total}}) \log_{10} k_{\text{cond}} + w_{\text{total}} \log_{10} k_{\text{turb}}$$
 
-$$k_{\text{eff}} = 10^{\log_{10} k_{\text{eff}}}$$
+$$k_{\text{eff}} = \max\left(k_{\text{cond}}, \, \text{clamp}\left(10^{\log_{10} \tilde{k}}, \, k_{\text{floor}}, \, k_{\text{cutoff}}\right)\right)$$
 
-Strict monotonicity is enforced by clamping $k_{\text{eff}} = \max(k_{\text{cond}}, k_{\text{eff}})$; this condition guarantees that convective enhancement never reduces conductivity below background solid conduction.
+This clamp ensures that convective enhancement never reduces marker conductivity below $k_{\text{cond}}$.
 
 ### 3. Viscosity Matching in the Mush Interval
 
-To prevent the unphysical drop where $\eta_{\text{num}} < \eta_{\text{fluid}}$ during the initial stages of melting, the reference fluid viscosity $\eta_{\text{fluid}}$ is blended from the current matrix viscosity down to the magma viscosity:
+To prevent $\eta_{\text{num}} < \eta_{\text{fluid}}$ at the onset of melting, the reference fluid viscosity $\eta_{\text{fluid}}$ equals the solver-clamped melt-weakened viscosity $\eta_{\text{num}}$ (`etasolidcur`) for $F_m \le F_{\text{start}}$, and blends logarithmically to `melting.eta_fluid_silicate` over $(F_{\text{start}}, F_{\text{end}}]$ using $\xi_F$ from Section 1:
 
-$$\log_{10} \eta_{\text{fluid}}(F_m) = (1 - \xi) \log_{10} \eta_{\text{matrix}} + \xi \log_{10} \eta_{\text{fluid,silicate}}$$
+$$\ln \eta_{\text{fluid}}(F_m) = (1 - \xi_F) \ln \eta_{\text{num}}(F_m) + \xi_F \ln \eta_{\text{fluid,silicate}}$$
 
 This formulation maintains $\eta_{\text{num}} / \eta_{\text{fluid}} \ge 1.0$ throughout the entire transition window.
 
 ### 4. Quadratic Surface Thermal Contrast Weighting
 
-To prevent convective heat enhancement from penetrating cold planetesimal crust or radiating surfaces, a thermal contrast weight $w_T$ modulates the transition:
+To prevent convective heat enhancement from acting on markers near the surface reference temperature (for example when segregated melt reaches cold surface layers), a thermal contrast weight $w_T$ modulates the transition relative to $T_{\text{surface,ref}}$ (`melting.T_surface_ref`, default $300.0\text{ K}$) over `melting.dT_turb_min` ($\Delta T_{\min} = 10.0\text{ K}$):
 
-$$\Delta T = \max(0.0, T - T_{\text{surface}})$$
+$$\Delta T = \max(0.0, T - T_{\text{surface,ref}})$$
 
 $$w_T = \left[ \text{clamp}\left( \frac{\Delta T}{\Delta T_{\min}}, 0.0, 1.0 \right) \right]^2$$
 
-The quadratic exponent guarantees that $\partial w_T / \partial T \to 0$ continuously as $T \to T_{\text{surface}}$, which eliminates gradient kinks at the surface boundary.
+The quadratic exponent guarantees that $\partial w_T / \partial T \to 0$ continuously as $T \to T_{\text{surface,ref}}$, which eliminates gradient kinks at the surface boundary.
 The complete transition weight is:
 
-$$w_{\text{total}} = w_F(\xi) \cdot w_T$$
+$$w_{\text{total}} = w_F(\xi_F) \cdot w_T$$
 
-When $\Delta T \to 0$ or $F_m \le F_{\text{start}}$, $w_{\text{total}} \to 0$, recovering exact solid lattice conductivity $k_{\text{cond}}$.
+When $w_{\text{total}} = 0$ ($\Delta T = 0$ or $F_m \le F_{\text{start}}$), the routine returns $\max(k_{\text{cond}}, \text{clamp}(k_{\text{cond}}, k_{\text{floor}}, k_{\text{cutoff}}))$, which equals $k_{\text{cond}}$ whenever $k_{\text{cond}} \ge k_{\text{floor}}$.
+
+**Where this is checked.**
+Regularized soft-turbulence conductivity in the complete time loop is checked on the [Magma Ocean Conductivity](../validation/magma_ocean_conductivity.md) validation page.
 
 ---
 
@@ -226,7 +240,7 @@ Silicate melt migration spans two physical regimes separated by the rheologicall
 
 1. **Porous Darcy Percolation ($F_m \le F_{\text{perc\_end}}$):**
    Below the disaggregation threshold, solid silicate grains form a continuous, compacting framework.
-   Buoyant melt percolates through interconnected channels following Darcy's law (McKenzie, 1984):
+   Buoyant melt percolates through interconnected channels following Darcy's law ([McKenzie, 1984](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology)):
 
    $$\mathbf{v}_{\text{perc}} = -\frac{k_\phi}{\eta_{\text{melt}} F_m} \Delta\rho \, \mathbf{g}$$
 
@@ -243,7 +257,7 @@ Silicate melt migration spans two physical regimes separated by the rheologicall
 2. **Hindered Stokes Crystal Settling ($F_m \ge F_{\text{settle\_start}}$):**
    When the melt fraction exceeds the disaggregation threshold, the solid framework breaks down into a crystal suspension.
    Isolated silicate crystals settle downward through liquid magma under gravity, while buoyant melt ascends.
-   The upward melt segregation velocity equals the downward crystal settling flux scaled by the Richardson and Zaki (1954) hindered settling relation:
+   The upward melt segregation velocity equals the downward crystal settling flux scaled by the [Richardson and Zaki (1954)](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology) hindered settling relation:
 
    $$\mathbf{v}_{\text{susp}} = \mathbf{v}_{\text{Stokes}} F_m^n$$
 
@@ -314,14 +328,13 @@ This bidirectional tracking preserves segregated melt on receiver markers across
 
 The melting and soft turbulence system operates on both Lagrangian markers and Eulerian grid cells:
 1. **Marker Update:**
-   Marker temperatures and lithostatic pressures determine $F_m$ for each marker.
-   Marker viscosities are computed using the suspension rheology model.
+   Marker temperatures and lithostatic pressures determine $F_m$, the solver-clamped melt-weakened viscosity `etatotalm`, the apparent heat capacity `rhocptotalm`, and the regularized conductivity `ktotalm` on each rock marker.
 2. **Marker-to-Grid Interpolation:**
    Harmonic and arithmetic interpolation schemes transfer marker viscosities and densities to staggered velocity and pressure nodes.
-3. **Cell Conductivity Evaluation:**
-   Effective thermal conductivities $k_{\text{eff}}$ are evaluated at staggered cell faces using the regularized soft turbulence formulation.
-4. **Implicit Energy Solver:**
-   The parabolic thermal energy equation is assembled into a linear system with variable apparent heat capacity and variable thermal conductivity, and is solved implicitly to maintain numerical stability.
+   Marker conductivities `ktotalm` are averaged arithmetically onto staggered `KX` and `KY` faces.
+   When `surface_temperature = :fixed`, the uncut rock-only face conductivities `KXu` and `KYu` are also retained for the spherical metric source.
+3. **Implicit Energy Solver and Subgrid Relaxation:**
+   The parabolic thermal energy equation is assembled into a linear system with variable apparent heat capacity and face conductivities and solved implicitly, followed by subgrid marker-node thermal relaxation using each marker's `ktotalm` and `rhocptotalm`.
 
 ---
 
@@ -332,9 +345,11 @@ The melting and soft turbulence system operates on both Lagrangian markers and E
 Melting and turbulence parameters are set in the `[melting]` table:
 - `active`: Enables silicate melting thermodynamics and apparent heat capacity buffering.
 - `soft_turbulence`: Enables regularized sub-grid soft turbulence convection.
-- `turb_exponent`: Convective heat flux scaling exponent ($\beta = 1/3$ for Solomatov 2007 soft turbulence; $\beta = 1/2$ for laminar boundary layers).
+- `turb_exponent`: Convective heat flux scaling exponent ($\beta = 1/3$ for [Solomatov (2007)](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology) and [Solomatov (2015)](../reference/bibliography.md#Silicate-Melting-and-Magma-Rheology) soft turbulence; $\beta = 1/2$ for the square-root viscosity law of `i2elvis`).
 - `eta_fluid_silicate`: Dynamic viscosity of liquid silicate magma ($100.0\text{ Pa}\cdot\text{s}$).
 - `F_turb_start` and `F_turb_end`: Melt fraction bounds for smoothstep conductivity blending ($[0.30, 0.50]$).
+- `T_surface_ref` and `dT_turb_min`: Reference surface temperature ($300.0\text{ K}$) and ramp width ($10.0\text{ K}$) of the thermal contrast weight $w_T$.
+- `k_turb_floor` and `k_turb_cutoff`: Lower ($10^{-3}\text{ W}/(\text{m}\cdot\text{K})$) and upper ($10^6\text{ W}/(\text{m}\cdot\text{K})$) bounds on the effective conductivity.
 - `T_solidus` and `T_liquidus`: Phase-dependent solidus and liquidus temperatures.
 - `dpdt_clapeyron`: Pressure-dependent melting slope $dT/dP$ (default $0.0\text{ K/Pa}$; typical $1.2\times 10^{-7}\text{ K/Pa}$).
 

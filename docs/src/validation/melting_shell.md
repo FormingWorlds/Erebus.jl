@@ -269,6 +269,7 @@ These limits hold in Erebus and in the 1-D model alike, so the comparison above 
 - Only the silicate melting law acts, so neither metal nor melt moves.
   The porosity model `porosity.model = "henke2012"` requires core formation (metal percolation and settling) and magma transport off: the configuration check throws an `ArgumentError` if one of them is on.
 - The melt does not raise the conductivity of the rock: there is no effective conductivity of convecting melt.
+  The [magma ocean conductivity page](magma_ocean_conductivity.md) turns that law on and checks it against the 1-D model.
 - The melt has the density of the solid, so it does not rise.
 
 ---

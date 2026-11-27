@@ -614,3 +614,408 @@ test_name = "test_melting_shell.jl"
 page = "validation/melting_shell.md"
 number = "0.40"
 test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1580.64"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1578.38"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "2.26"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.63"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "4.74"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "3.33"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "4.29"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "15640"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "16440"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "15000"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "15750"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "640"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "690"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.85"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.92"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.0283"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.0188"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "705.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.91"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1844.6"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "264.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "106.8"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1984.4"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "403.8"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.98"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "30.792603"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "6463.304070"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-1053.38"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1489.57"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1738.54"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1769.53"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "279.96"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.00906"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.0237"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.24"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.00251"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-0.0105"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "2.82"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "255.64"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "14.22"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-12.07"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "5.28"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "121.54"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "9.11"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "3.89"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.0314"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.1422"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1570.9"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1398.8"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1603.6"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1575.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1399.7"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1679.1"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1599.6"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1530.2"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1721.7"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1647.8"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1530.3"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "810.2"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1097.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "757.6"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "801.3"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "3.42"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "15187.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "16031.25"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.21"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.09"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "562.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-41.34"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "41.46"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "4.17"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-2.95"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "3000.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "8.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "5.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "6.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.04"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.025"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.01"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "20"
+test_name = "test_magma_ocean_conductivity.jl"

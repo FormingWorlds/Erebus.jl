@@ -41,6 +41,37 @@ const MELTING_SHELL_CONFIG_KEYS = (
     "spherical_metric",
 )
 
+const MAGMA_OCEAN_CONDUCTIVITY_CONFIG_KEYS = (
+    "Nx",
+    "Nr_reference",
+    "n_steps",
+    "dt_yr",
+    "t_form_yr",
+    "phi_init",
+    "porosity_model",
+    "R_planet_m",
+    "L_box_m",
+    "ratio_al",
+    "L_melt_J_kg",
+    "T_solidus_K",
+    "T_liquidus_K",
+    "rho_melt_kg_m3",
+    "soft_turbulence",
+    "turb_exponent",
+    "eta_fluid_silicate_Pa_s",
+    "F_turb_start",
+    "F_turb_end",
+    "etamin_Pa_s",
+    "rhocp_rock_J_m3K",
+    "k_rock_W_mK",
+    "T_space_K",
+    "surface_temperature",
+    "tmax_l2_T_min_K",
+    "radius_atol_cells",
+    "seed",
+    "spherical_metric",
+)
+
 const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
     "spherical_conduction" => (
         "Nx_coarse",
@@ -190,6 +221,8 @@ const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
     ),
     "melting_shell" => MELTING_SHELL_CONFIG_KEYS,
     "melting_shell_suite" => MELTING_SHELL_CONFIG_KEYS,
+    "magma_ocean_conductivity" => MAGMA_OCEAN_CONDUCTIVITY_CONFIG_KEYS,
+    "magma_ocean_conductivity_suite" => MAGMA_OCEAN_CONDUCTIVITY_CONFIG_KEYS,
 )
 
 const REQUIRED_METRIC_KEYS = (
