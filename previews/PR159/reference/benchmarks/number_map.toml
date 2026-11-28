@@ -1,0 +1,1021 @@
+# docs/src/reference/benchmarks/number_map.toml
+# Maps documented numeric values in validation pages to test assertions.
+# Columns:
+# page: relative path to the documentation page under docs/src/
+# number: numeric value (string or float representation) as documented
+# test_name: relative path to the test file under test/ containing the assertion verifying this number
+
+[[entry]]
+page = "reference/benchmarks/radionuclides.md"
+number = "2.62"
+test_name = "test_constants.jl"
+
+[[entry]]
+page = "reference/benchmarks/core_formation.md"
+number = "1213"
+test_name = "test_core_formation.jl"
+
+[[entry]]
+page = "reference/benchmarks/core_geochemistry.md"
+number = "1873"
+test_name = "test_core_volatile_partitioning.jl"
+
+[[entry]]
+page = "reference/benchmarks/coupled_atmosphere.md"
+number = "44.0095"
+test_name = "test_atmosphere.jl"
+
+[[entry]]
+page = "reference/benchmarks/dehydration_darcy_coupling.md"
+number = "1.0e-8"
+test_name = "test_dehydration_darcy_coupling.jl"
+
+[[entry]]
+page = "reference/benchmarks/hcns_solubility.md"
+number = "12760.0"
+test_name = "test_volatile_solubility_hcns.jl"
+
+[[entry]]
+page = "reference/benchmarks/hydrothermal_reactions.md"
+number = "40000.0"
+test_name = "test_reaction_pathways.jl"
+
+[[entry]]
+page = "reference/benchmarks/jeans_escape.md"
+number = "1.380649"
+test_name = "test_jeans_escape.jl"
+
+[[entry]]
+page = "reference/benchmarks/mineral_assemblages.md"
+number = "58.6934"
+test_name = "test_normative_accessory_minerals.jl"
+
+[[entry]]
+page = "reference/benchmarks/permeability.md"
+number = "0.05"
+test_name = "test_hydrofracture_stability.jl"
+
+[[entry]]
+page = "reference/benchmarks/redox_buffers.md"
+number = "-27489.0"
+test_name = "test_redox.jl"
+
+[[entry]]
+page = "reference/benchmarks/thermal_conduction.md"
+number = "2.520"
+test_name = "test_physics.jl"
+
+[[entry]]
+page = "reference/benchmarks/volatile_retention.md"
+number = "1400.0"
+test_name = "test_volatile_retention.jl"
+
+[[entry]]
+page = "validation/spherical_compaction.md"
+number = "1.257057"
+test_name = "test_validation_spherical_compaction.jl"
+
+[[entry]]
+page = "validation/spherical_compaction.md"
+number = "114.2"
+test_name = "test_validation_spherical_compaction.jl"
+
+[[entry]]
+page = "validation/spherical_compaction.md"
+number = "108.9"
+test_name = "test_validation_spherical_compaction.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.70710"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.84836"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.70998"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.84486"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.8401398"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.8403029"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.68482"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.82793"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "9.7273"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "1.625"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "1.99"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "2.21"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "4.90"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "5.41"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "3.00"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "3.30"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "7.01"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "7.67"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "8.6724558541"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.853"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "2/3"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "2.06"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.45"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.74"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.08 %"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "1100"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.011"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "1.58"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.63"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "8 / 11"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "4.3581222816"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.57"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.22"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "24.25"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "-30"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.25"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "32"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.025"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.0060"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "10 %"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "80"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "validation/spherical_momentum.md"
+number = "0.8"
+test_name = "test_validation_spherical_momentum.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.4286012"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.65"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.88"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.85"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.42"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.13"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "700"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "3300"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "85000"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1.9872"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1.5"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "26 %"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1667"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "564"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1e-12"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1e-6"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "5 %"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.58"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1.72"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "5 s"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1e-3"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "factor 3"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "37 %"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "46 %"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1e-10"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "validation/porous_shell.md"
+number = "0.10"
+test_name = "test_validation_porous_shell.jl"
+
+[[entry]]
+page = "validation/porous_shell.md"
+number = "5.85"
+test_name = "test_validation_porous_shell.jl"
+
+[[entry]]
+page = "validation/porous_shell.md"
+number = "750"
+test_name = "test_validation_porous_shell.jl"
+
+[[entry]]
+page = "validation/porous_shell.md"
+number = "1500"
+test_name = "test_validation_porous_shell.jl"
+
+[[entry]]
+page = "validation/porous_shell.md"
+number = "4590"
+test_name = "test_validation_porous_shell.jl"
+
+[[entry]]
+page = "validation/porous_shell.md"
+number = "4500"
+test_name = "test_validation_porous_shell.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.05"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "1000"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "1.8"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.030"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.016"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.0086"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "0.39"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "245.4"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "explanations/discretization_numerics.md"
+number = "290"
+test_name = "test_fixed_surface_temperature.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1661.3"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "13130"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "11.6"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "5.9"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "755"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "380"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1.01"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1.42"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.0061"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "16.0"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "89.5"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "46.2"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "4.0"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.0289"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.0481"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.0391"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.04"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.025"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1100"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "1.5"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.01"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.382"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "19.5"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/melting_shell.md"
+number = "0.40"
+test_name = "test_melting_shell.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1580.64"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1578.38"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "2.26"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.63"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "4.74"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "3.33"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "4.29"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "15640"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "16440"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "15000"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "15750"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "640"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "690"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.85"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.92"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.0283"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.0188"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "705.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.91"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1844.6"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "264.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "106.8"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1984.4"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "403.8"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.98"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "30.792603"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "6463.304070"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-1053.38"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1489.57"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1738.54"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1769.53"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "279.96"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.00906"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.0237"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.24"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.00251"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-0.0105"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "2.82"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "255.64"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "14.22"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-12.07"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "5.28"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "121.54"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "9.11"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "3.89"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.0314"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.1422"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1570.9"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1398.8"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1603.6"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1575.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1399.7"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1679.1"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1599.6"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1530.2"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1721.7"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1647.8"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1530.3"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "810.2"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1097.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "757.6"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "801.3"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "3.42"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "15187.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "16031.25"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.21"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.09"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "562.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-41.34"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "41.46"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "4.17"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "-2.95"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "3000.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "8.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "5.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "6.0"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.04"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.025"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "0.01"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "1.5"
+test_name = "test_magma_ocean_conductivity.jl"
+
+[[entry]]
+page = "validation/magma_ocean_conductivity.md"
+number = "20"
+test_name = "test_magma_ocean_conductivity.jl"
