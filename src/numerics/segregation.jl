@@ -267,238 +267,277 @@ Nothing
     return nothing
 end
 
+@inline function _empty_metal_segregation_result()
+    return (;
+        max_v_seg=0.0,
+        max_v_char=0.0,
+        n_subcycles=0,
+        dt_sub=0.0,
+        total_dissipation_energy=0.0,
+        total_sensible_energy=0.0,
+        raw_conservation_rel_error=0.0,
+    )
+end
+
 """
-Apply iron metal segregation via sub-cycled conservative drift-flux transport.
+Evaluate absolute characteristic derivative |dq/dphi| of hindered Stokes settling flux.
 
 $(SIGNATURES)
-
-Solves the conservative drift-flux transport equation for molten iron metal
-percolation through a solid silicate matrix and Stokes settling through a magma ocean.
-Subcycles the explicit finite-volume transport step using a local CFL criterion.
-Guarantees mass conservation of total metal to machine precision when input marker
-metal fractions satisfy 0 <= Xfe_bulk <= phi_pack.
-
-References:
-- Stevenson (1990), Fluid dynamics of core formation.
-- Deguen et al. (2014), Earth Planet. Sci. Lett., 391, 274-287.
-- Lichtenberg et al. (2019, 2021), Science / JGR Planets.
-
-# Arguments
-- `xm::AbstractVector{Float64}`: Marker x-coordinates [m]
-- `ym::AbstractVector{Float64}`: Marker y-coordinates [m]
-- `tm::AbstractVector{<:Integer}`: Marker material phase type
-- `tkm::AbstractVector{Float64}`: Marker temperature [K]
-- `phim::AbstractVector{Float64}`: Marker silicate melt fraction / porosity [-]
-- `Xfe_bulk::AbstractVector{Float64}`: Marker bulk metal volume fraction [-]
-- `Xfem::AbstractVector{Float64}`: Marker molten metal fraction [-]
-- `marknum::Integer`: Number of markers
-- `dt::Real`: Timestep duration [s]
-- `cfg_core::CoreFormationConfig`: Core formation configuration parameters
-
-# Keyword Arguments
-- `coords::GridCoordinates=default_grid_coordinates()`: `GridCoordinates` domain geometry struct
-- `xcenter::Real=coords.xcenter`: Planet center x [m]
-- `ycenter::Real=coords.ycenter`: Planet center y [m]
-- `rplanet::Real=50000.0`: Planet radius [m]
-- `g_surf::Real=0.1`: Reference surface gravity magnitude [m/s^2]
-- `gx::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional x-gravity on grid [m/s^2]
-- `gy::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional y-gravity on grid [m/s^2]
-- `Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional grid to accumulate dissipation heating [W/m^3]
-- `rho_silicate::Real=3000.0`: Reference silicate rock density [kg/m^3]
-- `eta_silicate::Real=1.0e18`: Reference silicate rock dynamic viscosity [Pa s]
-- `ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Matrix viscosity on grid [Pa s]
-- `Fm::Union{Nothing,AbstractVector{Float64}}=nothing`: Marker silicate melt fraction [-]
-- `T_solidus_silicate::Real=1400.0`: Reference silicate solidus temperature [K]
-- `T_liquidus_silicate::Real=1800.0`: Reference silicate liquidus temperature [K]
-- `spherical_metric::Bool=true`: Weight marker and cell inventories by 3D spherical shell weight
-- `w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing`: Optional precomputed marker out-of-plane weights [m]
-
-# Returns
-- NamedTuple `(; max_v_seg, n_subcycles, dt_sub, total_dissipation_energy)` where `total_dissipation_energy` is in [J/m].
 """
-function apply_metal_segregation!(
-    xm::AbstractVector{Float64},
-    ym::AbstractVector{Float64},
-    tm::AbstractVector{<:Integer},
-    tkm::AbstractVector{Float64},
-    phim::AbstractVector{Float64},
-    Xfe_bulk::AbstractVector{Float64},
-    Xfem::AbstractVector{Float64},
-    marknum::Integer,
-    dt::Real,
-    cfg_core::CoreFormationConfig;
-    coords::GridCoordinates=default_grid_coordinates(),
-    xcenter::Real=coords.xcenter,
-    ycenter::Real=coords.ycenter,
-    rplanet::Real=50000.0,
-    g_surf::Real=0.1,
-    gx::Union{Nothing,AbstractMatrix{Float64}}=nothing,
-    gy::Union{Nothing,AbstractMatrix{Float64}}=nothing,
-    Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing,
-    rho_silicate::Real=3000.0,
-    eta_silicate::Real=1.0e18,
-    ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing,
-    Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
-    T_solidus_silicate::Real=1400.0,
-    T_liquidus_silicate::Real=1800.0,
-    Xfe_H_m::Union{Nothing,AbstractVector{Float64}}=nothing,
-    Xfe_C_m::Union{Nothing,AbstractVector{Float64}}=nothing,
-    Xfe_N_m::Union{Nothing,AbstractVector{Float64}}=nothing,
-    Xfe_S_m::Union{Nothing,AbstractVector{Float64}}=nothing,
-    cfg_partition::Union{Nothing,MetalPartitionConfig}=nothing,
-    spherical_metric::Bool=true,
-    w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
-    workspace=nothing,
+@inline function _settling_flux_derivative_abs(
+    phi::Float64, v0_f::Float64, hindered_exponent::Float64, phi_pack::Float64
+)::Float64
+    if v0_f <= 0.0 || phi_pack <= 0.0 || phi < 0.0 || phi > phi_pack
+        return 0.0
+    end
+    if iszero(hindered_exponent)
+        return phi < phi_pack ? v0_f : 0.0
+    end
+    u = phi / phi_pack
+    if 0.0 < hindered_exponent < 1.0
+        u = min(u, 1.0 - 1.0e-7)
+    elseif phi >= phi_pack
+        return isapprox(hindered_exponent, 1.0; atol=1.0e-12) ? v0_f : 0.0
+    end
+    one_minus = max(1.0 - u, 0.0)
+    return v0_f *
+           (one_minus^(hindered_exponent - 1.0)) *
+           abs(1.0 - (hindered_exponent + 1.0) * u)
+end
+
+"""
+Compute maximum characteristic wave speed of the hindered-settling Riemann fan on [phi_D, phi_R].
+
+$(SIGNATURES)
+"""
+@inline function _godunov_settling_wave_speed(
+    phi_D::Float64,
+    phi_R::Float64,
+    v0_f::Float64,
+    hindered_exponent::Float64,
+    phi_pack::Float64,
+)::Float64
+    if v0_f <= 0.0 || phi_pack <= 0.0
+        return 0.0
+    end
+    pa = clamp(min(phi_D, phi_R), 0.0, phi_pack)
+    pb = clamp(max(phi_D, phi_R), 0.0, phi_pack)
+    # Clamping near phi_pack avoids singular (1 - u)^(m - 1) if 0 < m < 1
+    if 0.0 < hindered_exponent < 1.0
+        cap = phi_pack * (1.0 - 1.0e-7)
+        pa = min(pa, cap)
+        pb = min(pb, cap)
+    end
+    wmax = max(
+        _settling_flux_derivative_abs(pa, v0_f, hindered_exponent, phi_pack),
+        _settling_flux_derivative_abs(pb, v0_f, hindered_exponent, phi_pack),
+    )
+    if hindered_exponent > 1.0
+        phi_inflect = 2.0 * phi_pack / (hindered_exponent + 1.0)
+        if pa < phi_inflect < pb
+            wmax = max(
+                wmax,
+                _settling_flux_derivative_abs(
+                    phi_inflect, v0_f, hindered_exponent, phi_pack
+                ),
+            )
+        end
+    end
+    return wmax
+end
+
+"""
+Return characteristic percolation wave speed |dq_perc/dphi_m| for mobile metal [m/s].
+
+$(SIGNATURES)
+"""
+@inline function _percolation_wave_speed(
+    phi_m::Float64, v_perc::Float64, cfg_core::CoreFormationConfig
+)::Float64
+    v_perc <= 0.0 && return 0.0
+    phi_perm = min(clamp(phi_m, 0.0, 1.0), 1.0 - 1.0e-7)
+    phi_mob_p = phi_perm - cfg_core.phi_crit_perc
+    phi_mob_p <= 0.0 && return 0.0
+    phi_mob_eff = 0.0 < cfg_core.perm_exponent < 1.0 ? max(phi_mob_p, 1.0e-7) : phi_mob_p
+    return v_perc *
+           phi_perm *
+           (cfg_core.perm_exponent / phi_mob_eff + 2.0 / (1.0 - phi_mob_p))
+end
+
+"""
+Compute exact 1-D Godunov flux for hindered Stokes settling q(phi) = v0 * phi * (1 - phi / phi_pack)^m.
+
+$(SIGNATURES)
+"""
+@inline function _godunov_settling_flux(
+    phi_D::Float64,
+    phi_R::Float64,
+    v0_f::Float64,
+    hindered_exponent::Float64,
+    phi_pack::Float64,
+)::Float64
+    if v0_f <= 0.0 || phi_pack <= 0.0
+        return 0.0
+    end
+    pd = clamp(phi_D, 0.0, phi_pack)
+    pr = clamp(phi_R, 0.0, phi_pack)
+    q_d = if (pd <= 0.0 || pd >= phi_pack)
+        0.0
+    else
+        v0_f * pd * (1.0 - pd / phi_pack)^hindered_exponent
+    end
+    q_r = if (pr <= 0.0 || pr >= phi_pack)
+        0.0
+    else
+        v0_f * pr * (1.0 - pr / phi_pack)^hindered_exponent
+    end
+    if pd <= pr
+        return min(q_d, q_r)
+    end
+    q_max = max(q_d, q_r)
+    phi_star = phi_pack / (hindered_exponent + 1.0)
+    if pr < phi_star < pd && 0.0 < phi_star < phi_pack
+        q_star = v0_f * phi_star * (1.0 - phi_star / phi_pack)^hindered_exponent
+        q_max = max(q_max, q_star)
+    end
+    return q_max
+end
+
+"""
+Return settling regime blend weight (0 in percolation, 1 in magma settling).
+
+$(SIGNATURES)
+"""
+@inline function _metal_settling_blend_weight(
+    F_m::Float64, cfg_core::CoreFormationConfig
+)::Float64
+    if cfg_core.percolation_active && !cfg_core.settling_active
+        return 0.0
+    elseif !cfg_core.percolation_active && cfg_core.settling_active
+        return 1.0
+    else
+        return _cubic_hermite_weight(F_m, cfg_core.F_settle_start, cfg_core.F_perc_end)
+    end
+end
+
+"""
+Compute cell segregation velocity, wave speed, and percolation speed with zero allocations.
+
+$(SIGNATURES)
+"""
+@inline function _metal_cell_regime_speeds(
+    phi_m::Float64,
+    F_m::Float64,
+    drho::Float64,
+    g_acc::Float64,
+    v0::Float64,
+    phi_trap::Float64,
+    cfg_core::CoreFormationConfig,
 )
-    if (!cfg_core.percolation_active && !cfg_core.settling_active) ||
-        dt <= 0.0 ||
-        marknum <= 0
-        return (; max_v_seg=0.0, n_subcycles=0, dt_sub=0.0, total_dissipation_energy=0.0)
-    end
-
-    track_volatiles = (
-        cfg_partition !== nothing &&
-        cfg_partition.active &&
-        Xfe_H_m !== nothing &&
-        Xfe_C_m !== nothing &&
-        Xfe_N_m !== nothing &&
-        Xfe_S_m !== nothing
+    phi_c = clamp(phi_m, 0.0, 1.0)
+    v_perc = _percolation_interstitial_velocity(
+        phi_c,
+        F_m,
+        drho,
+        g_acc,
+        phi_trap;
+        percolation_active=cfg_core.percolation_active,
+        F_perc_end=cfg_core.F_perc_end,
+        phi_crit_perc=cfg_core.phi_crit_perc,
+        k_metal_ref=cfg_core.k_metal_ref,
+        eta_metal=cfg_core.eta_metal,
+        perm_exponent=cfg_core.perm_exponent,
+        phi0=cfg_core.phi0,
     )
+    v_char_perc = _percolation_wave_speed(phi_c, v_perc, cfg_core)
 
-    # Validate input marker bounds
-    @inbounds for m in 1:marknum
-        if tm[m] < 3
-            rmark = distance(xm[m], ym[m], xcenter, ycenter)
-            if rmark <= rplanet
-                xfe = Xfe_bulk[m]
-                if !isfinite(xfe) || xfe < 0.0 || xfe > cfg_core.phi_pack + 1.0e-7
-                    throw(
-                        DomainError(
-                            xfe,
-                            "Marker bulk metal fraction must be finite, non-negative, and <= phi_pack",
-                        ),
-                    )
-                end
-            end
-        end
+    v_settle = 0.0
+    v_char_settle = 0.0
+    if cfg_core.settling_active && F_m >= cfg_core.F_settle_start && phi_c > 0.0 && v0 > 0.0
+        m_exp = cfg_core.hindered_exponent
+        h = richardson_zaki_hindrance(
+            phi_c; hindered_exponent=m_exp, phi_pack=cfg_core.phi_pack
+        )
+        v_settle = v0 * h
+        v_char_settle = _settling_flux_derivative_abs(phi_c, v0, m_exp, cfg_core.phi_pack)
     end
 
-    Nx_val = coords.Nx
-    Ny_val = coords.Ny
-    dx_val = coords.dx
-    dy_val = coords.dy
-    dr_min = min(dx_val, dy_val)
+    w_settle = _metal_settling_blend_weight(F_m, cfg_core)
+    w_perc = 1.0 - w_settle
+    v_seg = w_perc * v_perc + w_settle * v_settle
+    v_char = max(v_seg, w_perc * v_char_perc + w_settle * v_char_settle)
+    return (; v_seg, v_char, v_perc)
+end
 
-    has_ws = (
-        workspace !== nothing &&
-        size(workspace.M_fe_cell) == (Ny_val, Nx_val) &&
-        (!track_volatiles || size(workspace.M_fe_H_cell) == (Ny_val, Nx_val))
-    )
+"""
+Precompute invariant cell fields, trap thresholds, suspension viscosities, and unhindered Stokes speeds.
 
-    # Allocate or reset cell accumulations
-    M_fe_cell = has_ws ? fill!(workspace.M_fe_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    M_rock_markers =
-        has_ws ? fill!(workspace.M_rock_markers, 0) : zeros(Int, Ny_val, Nx_val)
-    W_cell = has_ws ? fill!(workspace.W_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    v_seg_cell = has_ws ? fill!(workspace.v_seg_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    phi_m_cell = has_ws ? fill!(workspace.phi_m_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    F_m_cell = has_ws ? fill!(workspace.F_m_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    Xfem_cell = has_ws ? fill!(workspace.Xfem_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    g_acc_cell = has_ws ? fill!(workspace.g_acc_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    cap_cell = has_ws ? fill!(workspace.cap_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    phi_fe_cell =
-        has_ws ? fill!(workspace.phi_fe_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    T_cell = has_ws ? fill!(workspace.T_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    drho_cell = has_ws ? fill!(workspace.drho_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-
-    M_fe_H_cell = if track_volatiles
-        has_ws ? fill!(workspace.M_fe_H_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    else
-        zeros(Float64, 0, 0)
-    end
-    M_fe_C_cell = if track_volatiles
-        has_ws ? fill!(workspace.M_fe_C_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    else
-        zeros(Float64, 0, 0)
-    end
-    M_fe_N_cell = if track_volatiles
-        has_ws ? fill!(workspace.M_fe_N_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    else
-        zeros(Float64, 0, 0)
-    end
-    M_fe_S_cell = if track_volatiles
-        has_ws ? fill!(workspace.M_fe_S_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    else
-        zeros(Float64, 0, 0)
-    end
-
-    # Bin markers into grid cells
-    @inbounds for m in 1:marknum
-        if tm[m] < 3
-            rmark = distance(xm[m], ym[m], xcenter, ycenter)
-            if rmark <= rplanet
-                j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
-                i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
-                w_m = _marker_segregation_weight(m, rmark, dr_min, spherical_metric, w3d_m)
-                fe_m = Xfe_bulk[m]
-                M_fe_cell[i_c, j_c] += fe_m * w_m
-                M_rock_markers[i_c, j_c] += 1
-                W_cell[i_c, j_c] += w_m
-                phi_m_cell[i_c, j_c] += Xfem[m] * w_m
-                T_cell[i_c, j_c] += tkm[m] * w_m
-                F_m_val = if Fm !== nothing
-                    Fm[m]
-                elseif tkm[m] >= T_solidus_silicate &&
-                    T_liquidus_silicate > T_solidus_silicate
-                    clamp(
-                        (tkm[m] - T_solidus_silicate) /
-                        (T_liquidus_silicate - T_solidus_silicate),
-                        0.0,
-                        1.0,
-                    )
-                else
-                    0.0
-                end
-                F_m_cell[i_c, j_c] += F_m_val * w_m
-                cap_cell[i_c, j_c] += max(cfg_core.phi_pack - fe_m, 0.0) * w_m
-
-                if track_volatiles
-                    M_fe_H_cell[i_c, j_c] += fe_m * w_m * Xfe_H_m[m]
-                    M_fe_C_cell[i_c, j_c] += fe_m * w_m * Xfe_C_m[m]
-                    M_fe_N_cell[i_c, j_c] += fe_m * w_m * Xfe_N_m[m]
-                    M_fe_S_cell[i_c, j_c] += fe_m * w_m * Xfe_S_m[m]
-                end
-            end
-        end
-    end
-
-    # The grid node takes the heat over the whole cell, also where a rim cell is part air.
-    markers_full_cell = (dx_val * dy_val) / (coords.dxm * coords.dym)
-    # Normalize cell averages
+$(SIGNATURES)
+"""
+function _precompute_metal_cell_coefficients!(
+    phi_trap_cell::Matrix{Float64},
+    phi_m_cell::Matrix{Float64},
+    F_m_cell::Matrix{Float64},
+    T_cell::Matrix{Float64},
+    T_star_cell::Matrix{Float64},
+    W_cell::Matrix{Float64},
+    g_acc_cell::Matrix{Float64},
+    drho_cell::Matrix{Float64},
+    v_stokes0_cell::Matrix{Float64},
+    m_solid_cell::Matrix{Float64},
+    M_fe_cell::Matrix{Float64},
+    M_fe_S_cell::Matrix{Float64};
+    xcenter::Float64,
+    ycenter::Float64,
+    rplanet::Float64,
+    dx_val::Float64,
+    dy_val::Float64,
+    Nx_val::Int,
+    Ny_val::Int,
+    g_surf::Float64,
+    gx::Union{Nothing,AbstractMatrix{Float64}},
+    gy::Union{Nothing,AbstractMatrix{Float64}},
+    rho_sil_solid::Float64,
+    rho_sil_melt::Float64,
+    eta_sil_cold::Float64,
+    eta_sil_hot::Float64,
+    tmsolidphase::Float64,
+    alpha_eta::Float64,
+    phi_crit_silicate::Float64,
+    eta_melt_silicate::Float64,
+    etamax::Float64,
+    ETA::Union{Nothing,AbstractMatrix{Float64}},
+    track_volatiles::Bool,
+    cfg_partition::Union{Nothing,MetalPartitionConfig},
+    cfg_core::CoreFormationConfig,
+)
+    eta_min_susp = min(0.01, eta_melt_silicate)
     @inbounds for j in 1:Nx_val, i in 1:Ny_val
         w_c = W_cell[i, j]
-        if w_c > 0.0
-            phi_fe_cell[i, j] = M_fe_cell[i, j] / w_c
-            phi_m_cell[i, j] /= w_c
-            F_m_cell[i, j] /= w_c
-            T_cell[i, j] /= w_c
-            m_bulk = phi_fe_cell[i, j]
-            Xfem_cell[i, j] =
-                m_bulk > 0.0 ? clamp(phi_m_cell[i, j] / m_bulk, 0.0, 1.0) : 0.0
-        end
-    end
-
-    # Compute cell segregation velocities
-    @inbounds for j in 1:Nx_val, i in 1:Ny_val
-        if W_cell[i, j] <= 0.0
+        if w_c <= 0.0
             continue
         end
+        molten_w = phi_m_cell[i, j]
+        m_solid_cell[i, j] = max(M_fe_cell[i, j] - molten_w, 0.0)
+        phi_m_cell[i, j] = clamp(molten_w / w_c, 0.0, 1.0)
+        F_m = clamp(F_m_cell[i, j] / w_c, 0.0, 1.0)
+        F_m_cell[i, j] = F_m
+        T_c = T_cell[i, j] / w_c
+        T_cell[i, j] = T_c
+        T_star_cell[i, j] = T_c
+
+        phi_trap_cell[i, j] = effective_metal_trap_fraction(
+            F_m,
+            cfg_core.phi_residual;
+            percolation_active=cfg_core.percolation_active,
+            settling_active=cfg_core.settling_active,
+            F_settle_start=cfg_core.F_settle_start,
+            F_perc_end=cfg_core.F_perc_end,
+        )
+
         xc = (j - 0.5) * dx_val
         yc = (i - 0.5) * dy_val
         rc = distance(xc, yc, xcenter, ycenter)
-        if rc > rplanet
-            continue
-        end
 
         g_acc = if gx !== nothing && gy !== nothing
             g_mag = _cell_gravity_magnitude(gx, gy, i, j, Ny_val, Nx_val)
@@ -507,9 +546,6 @@ function apply_metal_segregation!(
             g_surf * min(rc / rplanet, 1.0)
         end
         g_acc_cell[i, j] = g_acc
-
-        phi_m = phi_m_cell[i, j]
-        F_m = F_m_cell[i, j]
 
         rho_metal_eff = if cfg_core.metal_density_mode !== :constant
             w_S_val =
@@ -521,44 +557,55 @@ function apply_metal_segregation!(
                     cfg_core.sulfur_fraction
                 end
             compute_liquid_metal_density(
-                w_S_val; T=max(T_cell[i, j], 100.0), law=cfg_core.metal_density_mode
+                w_S_val; T=max(T_c, 100.0), law=cfg_core.metal_density_mode
             )
         else
             cfg_core.rho_metal
         end
-        drho = max(rho_metal_eff - rho_silicate, 1.0)
+        rho_sil_eff = (1.0 - F_m) * rho_sil_solid + F_m * rho_sil_melt
+        drho = max(rho_metal_eff - rho_sil_eff, 1.0)
         drho_cell[i, j] = drho
 
-        if phi_m > 0.0 && g_acc > 0.0 && drho > 0.0
-            eta_matrix = if ETA !== nothing && i <= size(ETA, 1) && j <= size(ETA, 2)
-                ETA[i, j]
+        if g_acc > 0.0 &&
+            drho > 0.0 &&
+            cfg_core.settling_active &&
+            F_m >= cfg_core.F_settle_start
+            eta_base = if ETA !== nothing && i <= size(ETA, 1) && j <= size(ETA, 2)
+                max(ETA[i, j], 1.0e-12)
             else
-                eta_silicate
+                max(T_c > tmsolidphase ? eta_sil_hot : eta_sil_cold, 1.0e-12)
             end
-            eta_susp = compute_melt_weakened_viscosity(
-                eta_matrix, F_m, 1; phi_crit=0.4, eta_melt=10.0, etamin=0.1, etamax=1.0e20
+            eta_susp = compute_silicate_suspension_viscosity(
+                eta_base,
+                F_m;
+                alpha_eta=alpha_eta,
+                phi_crit=phi_crit_silicate,
+                eta_melt=eta_melt_silicate,
+                etamin=eta_min_susp,
+                etamax=etamax,
             )
             r_drop = if cfg_core.droplet_size_mode === :fixed
                 cfg_core.droplet_diameter_fixed / 2.0
             elseif cfg_core.droplet_size_mode === :capillary_mean ||
                 cfg_core.droplet_size_mode === :bond_mean ||
                 cfg_core.droplet_size_mode === :weber_mean
-                # Gravity-capillary (Bond) balance: d = sqrt(We_crit * sigma / (drho * g))
                 d_cap = sqrt(
                     cfg_core.We_crit * cfg_core.sigma_metal_silicate /
                     max(drho * g_acc, cfg_core.settling_drhog_floor),
                 )
                 clamp(d_cap / 2.0, cfg_core.droplet_radius_min, cfg_core.droplet_radius_max)
-            else # :weber_turbulent
+            else
                 v_est = stokes_settling_velocity(
                     cfg_core.droplet_diameter_fixed / 2.0,
                     drho,
                     max(g_acc, cfg_core.g_acc_floor_settling),
-                    eta_susp,
+                    eta_susp;
+                    hadamard_rybczynski=cfg_core.hadamard_rybczynski,
+                    eta_metal=cfg_core.eta_metal,
                 )
                 v_rel = max(v_est, cfg_core.v_rel_floor)
                 d_weber = weber_equilibrium_diameter(
-                    rho_silicate,
+                    rho_sil_eff,
                     v_rel,
                     cfg_core.sigma_metal_silicate;
                     We_crit=cfg_core.We_crit,
@@ -569,395 +616,546 @@ function apply_metal_segregation!(
                     cfg_core.droplet_radius_max,
                 )
             end
-
-            v_seg_cell[i, j] = metal_segregation_velocity(
-                phi_m,
-                F_m,
+            v_stokes0_cell[i, j] = stokes_settling_velocity(
+                r_drop,
                 drho,
                 g_acc,
                 eta_susp;
-                percolation_active=cfg_core.percolation_active,
-                settling_active=cfg_core.settling_active,
-                k_metal_ref=cfg_core.k_metal_ref,
-                eta_metal=cfg_core.eta_metal,
-                phi_crit_perc=cfg_core.phi_crit_perc,
-                phi_residual=cfg_core.phi_residual,
-                phi0=cfg_core.phi0,
-                perm_exponent=cfg_core.perm_exponent,
-                r_drop=r_drop,
-                hindered_exponent=cfg_core.hindered_exponent,
-                phi_pack=cfg_core.phi_pack,
                 hadamard_rybczynski=cfg_core.hadamard_rybczynski,
-                F_settle_start=cfg_core.F_settle_start,
-                F_perc_end=cfg_core.F_perc_end,
+                eta_metal=cfg_core.eta_metal,
             )
         end
     end
+    return nothing
+end
 
-    max_v = maximum(v_seg_cell)
-    if max_v <= 0.0
-        return (; max_v_seg=0.0, n_subcycles=0, dt_sub=0.0, total_dissipation_energy=0.0)
+@inline function _evaluate_metal_face_rate(
+    phi_m_D::Float64,
+    phi_tot_R::Float64,
+    phi_trap_D::Float64,
+    F_m_D::Float64,
+    v_perc_D::Float64,
+    v_seg_D::Float64,
+    v_char_D::Float64,
+    v0_D::Float64,
+    cfg_core::CoreFormationConfig,
+)
+    phi_mob_D = max(phi_m_D - phi_trap_D, 0.0)
+    phi_pack = cfg_core.phi_pack
+    if phi_mob_D <= 1.0e-15 || (phi_pack - phi_tot_R) <= 1.0e-12
+        return (0.0, 0.0, 0.0)
+    end
+    w_s_D = _metal_settling_blend_weight(F_m_D, cfg_core)
+    q_perc = (1.0 - w_s_D) * v_perc_D * phi_m_D
+    m_exp = cfg_core.hindered_exponent
+    # Donor unhindered mobility prevents low-viscosity empty receivers from over-draining mush
+    q_settle = w_s_D * _godunov_settling_flux(phi_m_D, phi_tot_R, v0_D, m_exp, phi_pack)
+    q_tot = q_perc + q_settle
+    if q_tot <= 0.0
+        return (0.0, 0.0, 0.0)
+    end
+    v_char_perc_f = (1.0 - w_s_D) * _percolation_wave_speed(phi_m_D, v_perc_D, cfg_core)
+    v_char_settle_f =
+        w_s_D * _godunov_settling_wave_speed(phi_m_D, phi_tot_R, v0_D, m_exp, phi_pack)
+    v_char_f = max(v_seg_D, v_char_D, v_char_perc_f + v_char_settle_f)
+    return (q_tot, v_seg_D, v_char_f)
+end
+
+"""
+Refresh subcycle cell segregation speeds and compute unscaled active-face flux rates.
+
+$(SIGNATURES)
+"""
+function _compute_metal_subcycle_rates!(
+    req_flux_x::Matrix{Float64},
+    req_flux_y::Matrix{Float64},
+    outflow_tot::Matrix{Float64},
+    inflow_tot::Matrix{Float64},
+    v_seg_cell::Matrix{Float64},
+    v_char_cell::Matrix{Float64},
+    v_perc_cell::Matrix{Float64},
+    m_fe::Matrix{Float64},
+    m_solid_cell::Matrix{Float64},
+    W_cell::Matrix{Float64},
+    F_m_cell::Matrix{Float64},
+    phi_trap_cell::Matrix{Float64};
+    v_stokes0_cell::Matrix{Float64},
+    drho_cell::Matrix{Float64},
+    g_acc_cell::Matrix{Float64},
+    cfg_core::CoreFormationConfig,
+    gx::Union{Nothing,AbstractMatrix{Float64}},
+    gy::Union{Nothing,AbstractMatrix{Float64}},
+    xcenter::Float64,
+    ycenter::Float64,
+    dx_val::Float64,
+    dy_val::Float64,
+    Nx_val::Int,
+    Ny_val::Int,
+)
+    fill!(outflow_tot, 0.0)
+    fill!(inflow_tot, 0.0)
+    fill!(req_flux_x, 0.0)
+    fill!(req_flux_y, 0.0)
+
+    @inbounds for j in 1:Nx_val, i in 1:Ny_val
+        w_c = W_cell[i, j]
+        if w_c <= 0.0
+            v_seg_cell[i, j] = 0.0
+            v_char_cell[i, j] = 0.0
+            v_perc_cell[i, j] = 0.0
+            continue
+        end
+        phi_m = clamp((m_fe[i, j] - m_solid_cell[i, j]) / w_c, 0.0, 1.0)
+        sp = _metal_cell_regime_speeds(
+            phi_m,
+            F_m_cell[i, j],
+            drho_cell[i, j],
+            g_acc_cell[i, j],
+            v_stokes0_cell[i, j],
+            phi_trap_cell[i, j],
+            cfg_core,
+        )
+        v_seg_cell[i, j] = sp.v_seg
+        v_char_cell[i, j] = sp.v_char
+        v_perc_cell[i, j] = sp.v_perc
     end
 
-    # CFL calculation and subcycling
-    dt_cfl = cfg_core.cfl_settling * min(dx_val, dy_val) / max_v
-    n_sub_raw = Int(ceil(dt / dt_cfl))
-    if n_sub_raw > cfg_core.max_subcycles
-        @warn "CFL subcycling requires $n_sub_raw steps, capped at max_subcycles $(cfg_core.max_subcycles); segregation transport throttled" maxlog=10
-    end
-    n_sub = clamp(n_sub_raw, 1, cfg_core.max_subcycles)
-    dt_sub = dt / n_sub
+    max_v_active = 0.0
+    max_char_active = 0.0
 
-    # Working copy of cell metal mass for subcycling
-    m_fe = has_ws ? copyto!(workspace.m_fe, M_fe_cell) : copy(M_fe_cell)
-    total_diss_energy = 0.0
+    # East-West active faces
+    @inbounds for j in 1:(Nx_val - 1)
+        xf = j * dx_val
+        for i in 1:Ny_val
+            yf = (i - 0.5) * dy_val
+            dxf = xf - xcenter
+            dyf = yf - ycenter
+            rf = sqrt(dxf^2 + dyf^2)
+            if rf < 1.0e-3
+                continue
+            end
+            nx = if gx !== nothing && gy !== nothing
+                gx_f, gy_f = _face_gravity_ew(gx, gy, i, j, Ny_val, Nx_val)
+                g_f = hypot(gx_f, gy_f)
+                g_f > 1.0e-10 ? gx_f / g_f : -dxf / rf
+            else
+                -dxf / rf
+            end
+            if abs(nx) <= 0.0
+                continue
+            end
+            donor_j = nx > 0.0 ? j : j + 1
+            rec_j = nx > 0.0 ? j + 1 : j
+            w_donor = W_cell[i, donor_j]
+            w_rec = W_cell[i, rec_j]
+            if w_donor <= 0.0 || w_rec <= 0.0
+                continue
+            end
+            phi_m_D = clamp(
+                (m_fe[i, donor_j] - m_solid_cell[i, donor_j]) / w_donor, 0.0, 1.0
+            )
+            phi_tot_R = m_fe[i, rec_j] / w_rec
+            q_tot, v_f, c_f = _evaluate_metal_face_rate(
+                phi_m_D,
+                phi_tot_R,
+                phi_trap_cell[i, donor_j],
+                F_m_cell[i, donor_j],
+                v_perc_cell[i, donor_j],
+                v_seg_cell[i, donor_j],
+                v_char_cell[i, donor_j],
+                v_stokes0_cell[i, donor_j],
+                cfg_core,
+            )
+            if q_tot <= 0.0
+                continue
+            end
 
-    m_fe_H = if track_volatiles
-        has_ws ? copyto!(workspace.m_fe_H, M_fe_H_cell) : copy(M_fe_H_cell)
-    else
-        zeros(Float64, 0, 0)
-    end
-    m_fe_C = if track_volatiles
-        has_ws ? copyto!(workspace.m_fe_C, M_fe_C_cell) : copy(M_fe_C_cell)
-    else
-        zeros(Float64, 0, 0)
-    end
-    m_fe_N = if track_volatiles
-        has_ws ? copyto!(workspace.m_fe_N, M_fe_N_cell) : copy(M_fe_N_cell)
-    else
-        zeros(Float64, 0, 0)
-    end
-    m_fe_S = if track_volatiles
-        has_ws ? copyto!(workspace.m_fe_S, M_fe_S_cell) : copy(M_fe_S_cell)
-    else
-        zeros(Float64, 0, 0)
-    end
-
-    flux_H_x = if track_volatiles
-        has_ws ? fill!(workspace.flux_H_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
-    else
-        zeros(Float64, 0, 0)
-    end
-    flux_H_y = if track_volatiles
-        has_ws ? fill!(workspace.flux_H_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
-    else
-        zeros(Float64, 0, 0)
-    end
-    flux_C_x = if track_volatiles
-        has_ws ? fill!(workspace.flux_C_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
-    else
-        zeros(Float64, 0, 0)
-    end
-    flux_C_y = if track_volatiles
-        has_ws ? fill!(workspace.flux_C_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
-    else
-        zeros(Float64, 0, 0)
-    end
-    flux_N_x = if track_volatiles
-        has_ws ? fill!(workspace.flux_N_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
-    else
-        zeros(Float64, 0, 0)
-    end
-    flux_N_y = if track_volatiles
-        has_ws ? fill!(workspace.flux_N_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
-    else
-        zeros(Float64, 0, 0)
-    end
-    flux_S_x = if track_volatiles
-        has_ws ? fill!(workspace.flux_S_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
-    else
-        zeros(Float64, 0, 0)
-    end
-    flux_S_y = if track_volatiles
-        has_ws ? fill!(workspace.flux_S_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
-    else
-        zeros(Float64, 0, 0)
+            max_v_active = max(max_v_active, v_f)
+            max_char_active = max(max_char_active, c_f)
+            rate = q_tot * abs(nx) * (w_donor / dx_val)
+            r_req = nx > 0.0 ? rate : -rate
+            req_flux_x[i, j] = r_req
+            if r_req > 0.0
+                outflow_tot[i, j] += r_req
+                inflow_tot[i, j + 1] += r_req
+            else
+                outflow_tot[i, j + 1] += -r_req
+                inflow_tot[i, j] += -r_req
+            end
+        end
     end
 
-    # Pre-allocated arrays for subcycling fluxes and limiters
-    req_flux_x =
-        has_ws ? fill!(workspace.req_flux_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
-    req_flux_y =
-        has_ws ? fill!(workspace.req_flux_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
-    flux_x = has_ws ? fill!(workspace.flux_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
-    flux_y = has_ws ? fill!(workspace.flux_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
-    outflow_tot =
-        has_ws ? fill!(workspace.outflow_tot, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    inflow_tot = has_ws ? fill!(workspace.inflow_tot, 0.0) : zeros(Float64, Ny_val, Nx_val)
-    alpha_out = has_ws ? fill!(workspace.alpha_out, 1.0) : ones(Float64, Ny_val, Nx_val)
-    alpha_in = has_ws ? fill!(workspace.alpha_in, 1.0) : ones(Float64, Ny_val, Nx_val)
+    # North-South active faces
+    @inbounds for i in 1:(Ny_val - 1)
+        yf = i * dy_val
+        for j in 1:Nx_val
+            xf = (j - 0.5) * dx_val
+            dxf = xf - xcenter
+            dyf = yf - ycenter
+            rf = sqrt(dxf^2 + dyf^2)
+            if rf < 1.0e-3
+                continue
+            end
+            ny = if gx !== nothing && gy !== nothing
+                gx_f, gy_f = _face_gravity_ns(gx, gy, i, j, Ny_val, Nx_val)
+                g_f = hypot(gx_f, gy_f)
+                g_f > 1.0e-10 ? gy_f / g_f : -dyf / rf
+            else
+                -dyf / rf
+            end
+            if abs(ny) <= 0.0
+                continue
+            end
+            donor_i = ny > 0.0 ? i : i + 1
+            rec_i = ny > 0.0 ? i + 1 : i
+            w_donor = W_cell[donor_i, j]
+            w_rec = W_cell[rec_i, j]
+            if w_donor <= 0.0 || w_rec <= 0.0
+                continue
+            end
+            phi_m_D = clamp(
+                (m_fe[donor_i, j] - m_solid_cell[donor_i, j]) / w_donor, 0.0, 1.0
+            )
+            phi_tot_R = m_fe[rec_i, j] / w_rec
+            q_tot, v_f, c_f = _evaluate_metal_face_rate(
+                phi_m_D,
+                phi_tot_R,
+                phi_trap_cell[donor_i, j],
+                F_m_cell[donor_i, j],
+                v_perc_cell[donor_i, j],
+                v_seg_cell[donor_i, j],
+                v_char_cell[donor_i, j],
+                v_stokes0_cell[donor_i, j],
+                cfg_core,
+            )
+            if q_tot <= 0.0
+                continue
+            end
 
-    # Subcycling loop
-    for _ in 1:n_sub
+            max_v_active = max(max_v_active, v_f)
+            max_char_active = max(max_char_active, c_f)
+            rate = q_tot * abs(ny) * (w_donor / dy_val)
+            r_req = ny > 0.0 ? rate : -rate
+            req_flux_y[i, j] = r_req
+            if r_req > 0.0
+                outflow_tot[i, j] += r_req
+                inflow_tot[i + 1, j] += r_req
+            else
+                outflow_tot[i + 1, j] += -r_req
+                inflow_tot[i, j] += -r_req
+            end
+        end
+    end
+
+    return (; max_v_active, max_char_active)
+end
+
+"""
+Advect one metal-hosted volatile species using realized metal fluxes and pre-update donor inventories.
+
+$(SIGNATURES)
+"""
+function _advect_metal_volatile_species!(
+    m_fe_sp::Matrix{Float64},
+    flux_sp_x::Matrix{Float64},
+    flux_sp_y::Matrix{Float64},
+    m_fe::Matrix{Float64},
+    flux_x::Matrix{Float64},
+    flux_y::Matrix{Float64},
+    Nx_val::Int,
+    Ny_val::Int,
+)::Nothing
+    @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
+        fx = flux_x[i, j]
+        if iszero(fx)
+            flux_sp_x[i, j] = 0.0
+        else
+            donor_j = fx > 0.0 ? j : j + 1
+            m_d = m_fe[i, donor_j]
+            flux_sp_x[i, j] = m_d > 0.0 ? fx * (m_fe_sp[i, donor_j] / m_d) : 0.0
+        end
+    end
+    @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
+        fy = flux_y[i, j]
+        if iszero(fy)
+            flux_sp_y[i, j] = 0.0
+        else
+            donor_i = fy > 0.0 ? i : i + 1
+            m_d = m_fe[donor_i, j]
+            flux_sp_y[i, j] = m_d > 0.0 ? fy * (m_fe_sp[donor_i, j] / m_d) : 0.0
+        end
+    end
+    @inbounds for j in 1:Nx_val, i in 1:Ny_val
+        F_w = (j > 1) ? flux_sp_x[i, j - 1] : 0.0
+        F_e = (j < Nx_val) ? flux_sp_x[i, j] : 0.0
+        F_n = (i > 1) ? flux_sp_y[i - 1, j] : 0.0
+        F_s = (i < Ny_val) ? flux_sp_y[i, j] : 0.0
+        m_fe_sp[i, j] += (F_w - F_e + F_n - F_s)
+    end
+    return nothing
+end
+
+"""
+Execute one CFL-bounded subcycle step: limit fluxes, advect metal/volatiles, update counterflow enthalpy, and accumulate dissipation.
+
+$(SIGNATURES)
+"""
+function _step_metal_fluxes_and_enthalpy!(
+    m_fe::Matrix{Float64},
+    m_solid_cell::Matrix{Float64},
+    W_cell::Matrix{Float64},
+    T_star_cell::Matrix{Float64},
+    phi_trap_cell::Matrix{Float64},
+    flux_x::Matrix{Float64},
+    flux_y::Matrix{Float64},
+    outflow_tot::Matrix{Float64},
+    inflow_tot::Matrix{Float64},
+    alpha_out::Matrix{Float64},
+    alpha_in::Matrix{Float64},
+    req_flux_x::Matrix{Float64};
+    req_flux_y::Matrix{Float64},
+    drho_cell::Matrix{Float64},
+    g_acc_cell::Matrix{Float64},
+    M_rock_markers::Matrix{Int},
+    Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}},
+    m_fe_H::Matrix{Float64},
+    m_fe_C::Matrix{Float64},
+    m_fe_N::Matrix{Float64},
+    m_fe_S::Matrix{Float64},
+    flux_H_x::Matrix{Float64},
+    flux_H_y::Matrix{Float64},
+    flux_C_x::Matrix{Float64},
+    flux_C_y::Matrix{Float64},
+    flux_N_x::Matrix{Float64},
+    flux_N_y::Matrix{Float64},
+    flux_S_x::Matrix{Float64},
+    flux_S_y::Matrix{Float64},
+    dt_sub_cur::Float64,
+    dt::Float64,
+    dx_val::Float64,
+    dy_val::Float64,
+    Nx_val::Int,
+    Ny_val::Int,
+    markers_full_cell::Float64,
+    phi_pack::Float64,
+    rhocp_m::Float64,
+    rhocp_s::Float64,
+    dissipation_heating::Bool,
+    sensible_heat_exchange::Bool,
+    track_volatiles::Bool,
+)::Float64
+    @inbounds for j in 1:Nx_val, i in 1:Ny_val
+        outflow_tot[i, j] *= dt_sub_cur
+        inflow_tot[i, j] *= dt_sub_cur
+        w_c = W_cell[i, j]
+        if w_c > 0.0
+            phi_m_c = clamp((m_fe[i, j] - m_solid_cell[i, j]) / w_c, 0.0, 1.0)
+            m_avail = max(phi_m_c - phi_trap_cell[i, j], 0.0) * w_c
+            m_cap = max(phi_pack - m_fe[i, j] / w_c, 0.0) * w_c
+            alpha_out[i, j] = if outflow_tot[i, j] > m_avail && m_avail > 0.0
+                m_avail / outflow_tot[i, j]
+            else
+                (outflow_tot[i, j] > m_avail ? 0.0 : 1.0)
+            end
+            alpha_in[i, j] = if inflow_tot[i, j] > m_cap && m_cap > 0.0
+                m_cap / inflow_tot[i, j]
+            else
+                (inflow_tot[i, j] > m_cap ? 0.0 : 1.0)
+            end
+        else
+            alpha_out[i, j] = 0.0
+            alpha_in[i, j] = 0.0
+        end
+    end
+
+    @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
+        r_req = req_flux_x[i, j] * dt_sub_cur
+        if iszero(r_req)
+            flux_x[i, j] = 0.0
+        else
+            donor_j = r_req > 0.0 ? j : j + 1
+            rec_j = r_req > 0.0 ? j + 1 : j
+            flux_x[i, j] = r_req * min(alpha_out[i, donor_j], alpha_in[i, rec_j])
+        end
+    end
+
+    @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
+        r_req = req_flux_y[i, j] * dt_sub_cur
+        if iszero(r_req)
+            flux_y[i, j] = 0.0
+        else
+            donor_i = r_req > 0.0 ? i : i + 1
+            rec_i = r_req > 0.0 ? i + 1 : i
+            flux_y[i, j] = r_req * min(alpha_out[donor_i, j], alpha_in[rec_i, j])
+        end
+    end
+
+    if track_volatiles
+        _advect_metal_volatile_species!(
+            m_fe_H, flux_H_x, flux_H_y, m_fe, flux_x, flux_y, Nx_val, Ny_val
+        )
+        _advect_metal_volatile_species!(
+            m_fe_C, flux_C_x, flux_C_y, m_fe, flux_x, flux_y, Nx_val, Ny_val
+        )
+        _advect_metal_volatile_species!(
+            m_fe_N, flux_N_x, flux_N_y, m_fe, flux_x, flux_y, Nx_val, Ny_val
+        )
+        _advect_metal_volatile_species!(
+            m_fe_S, flux_S_x, flux_S_y, m_fe, flux_x, flux_y, Nx_val, Ny_val
+        )
+    end
+
+    # Reuse outflow_tot as per-cell enthalpy delta dE_cell [K*J/m^3 * weight] during exchange
+    if sensible_heat_exchange
         fill!(outflow_tot, 0.0)
-        fill!(inflow_tot, 0.0)
-        fill!(req_flux_x, 0.0)
-        fill!(req_flux_y, 0.0)
-
-        # 1. Compute unscaled requested fluxes across East-West faces
-        @inbounds for j in 1:(Nx_val - 1)
-            xf = j * dx_val
-            for i in 1:Ny_val
-                yf = (i - 0.5) * dy_val
-                dxf = xf - xcenter
-                dyf = yf - ycenter
-                rf = sqrt(dxf^2 + dyf^2)
-                if rf > rplanet || rf < 1.0e-3
-                    continue
-                end
-
-                # Determine transport direction
-                nx = if gx !== nothing && gy !== nothing
-                    gx_f, gy_f = _face_gravity_ew(gx, gy, i, j, Ny_val, Nx_val)
-                    g_f = hypot(gx_f, gy_f)
-                    g_f > 1.0e-10 ? gx_f / g_f : -dxf / rf
-                else
-                    -dxf / rf
-                end
-
-                vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i, j + 1])
-                uf = vf * nx
-
-                donor_j = uf > 0.0 ? j : j + 1
-                rec_j = uf > 0.0 ? j + 1 : j
-
-                w_donor = W_cell[i, donor_j]
-                w_rec = W_cell[i, rec_j]
-                if w_donor <= 0.0 || w_rec <= 0.0
-                    continue
-                end
-
-                X_donor = m_fe[i, donor_j] / w_donor
-                X_mob = max(X_donor - cfg_core.phi_residual, 0.0) * Xfem_cell[i, donor_j]
-                m_avail = X_mob * w_donor
-
-                fx = abs(uf) * (dt_sub / dx_val) * m_avail
-                fx_req = uf > 0.0 ? fx : -fx
-                req_flux_x[i, j] = fx_req
-
-                if fx_req > 0.0
-                    outflow_tot[i, j] += fx_req
-                    inflow_tot[i, j + 1] += fx_req
-                else
-                    outflow_tot[i, j + 1] += -fx_req
-                    inflow_tot[i, j] += -fx_req
-                end
-            end
-        end
-
-        # 2. Compute unscaled requested fluxes across North-South faces
-        @inbounds for i in 1:(Ny_val - 1)
-            yf = i * dy_val
-            for j in 1:Nx_val
-                xf = (j - 0.5) * dx_val
-                dxf = xf - xcenter
-                dyf = yf - ycenter
-                rf = sqrt(dxf^2 + dyf^2)
-                if rf > rplanet || rf < 1.0e-3
-                    continue
-                end
-
-                ny = if gx !== nothing && gy !== nothing
-                    gx_f, gy_f = _face_gravity_ns(gx, gy, i, j, Ny_val, Nx_val)
-                    g_f = hypot(gx_f, gy_f)
-                    g_f > 1.0e-10 ? gy_f / g_f : -dyf / rf
-                else
-                    -dyf / rf
-                end
-
-                vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i + 1, j])
-                wf = vf * ny
-
-                donor_i = wf > 0.0 ? i : i + 1
-                rec_i = wf > 0.0 ? i + 1 : i
-
-                w_donor = W_cell[donor_i, j]
-                w_rec = W_cell[rec_i, j]
-                if w_donor <= 0.0 || w_rec <= 0.0
-                    continue
-                end
-
-                X_donor = m_fe[donor_i, j] / w_donor
-                X_mob = max(X_donor - cfg_core.phi_residual, 0.0) * Xfem_cell[donor_i, j]
-                m_avail = X_mob * w_donor
-
-                fy = abs(wf) * (dt_sub / dy_val) * m_avail
-                fy_req = wf > 0.0 ? fy : -fy
-                req_flux_y[i, j] = fy_req
-
-                if fy_req > 0.0
-                    outflow_tot[i, j] += fy_req
-                    inflow_tot[i + 1, j] += fy_req
-                else
-                    outflow_tot[i + 1, j] += -fy_req
-                    inflow_tot[i, j] += -fy_req
-                end
-            end
-        end
-
-        # 3. Multi-dimensional flux limiters per cell
-        @inbounds for j in 1:Nx_val, i in 1:Ny_val
-            w_c = W_cell[i, j]
-            if w_c > 0.0
-                X_c = m_fe[i, j] / w_c
-                m_avail = max(X_c - cfg_core.phi_residual, 0.0) * Xfem_cell[i, j] * w_c
-                m_cap = max(cfg_core.phi_pack - X_c, 0.0) * w_c
-                alpha_out[i, j] = if outflow_tot[i, j] > m_avail && m_avail > 0.0
-                    m_avail / outflow_tot[i, j]
-                else
-                    (outflow_tot[i, j] > m_avail ? 0.0 : 1.0)
-                end
-                alpha_in[i, j] = if inflow_tot[i, j] > m_cap && m_cap > 0.0
-                    m_cap / inflow_tot[i, j]
-                else
-                    (inflow_tot[i, j] > m_cap ? 0.0 : 1.0)
-                end
-            else
-                alpha_out[i, j] = 0.0
-                alpha_in[i, j] = 0.0
-            end
-        end
-
-        # 4. Scale fluxes by joint donor-receiver limiters
         @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
-            fx_req = req_flux_x[i, j]
-            if iszero(fx_req)
-                flux_x[i, j] = 0.0
-            else
-                donor_j = fx_req > 0.0 ? j : j + 1
-                rec_j = fx_req > 0.0 ? j + 1 : j
-                lim = min(alpha_out[i, donor_j], alpha_in[i, rec_j])
-                flux_x[i, j] = fx_req * lim
+            fx = flux_x[i, j]
+            if !iszero(fx)
+                dj = fx > 0.0 ? j : j + 1
+                rj = fx > 0.0 ? j + 1 : j
+                dV = abs(fx)
+                dE = (rhocp_m * T_star_cell[i, dj] - rhocp_s * T_star_cell[i, rj]) * dV
+                outflow_tot[i, dj] -= dE
+                outflow_tot[i, rj] += dE
             end
         end
-
         @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
-            fy_req = req_flux_y[i, j]
-            if iszero(fy_req)
-                flux_y[i, j] = 0.0
-            else
-                donor_i = fy_req > 0.0 ? i : i + 1
-                rec_i = fy_req > 0.0 ? i + 1 : i
-                lim = min(alpha_out[donor_i, j], alpha_in[rec_i, j])
-                flux_y[i, j] = fy_req * lim
-            end
-        end
-
-        if track_volatiles
-            @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
-                fx = flux_x[i, j]
-                if iszero(fx)
-                    flux_H_x[i, j] = 0.0
-                    flux_C_x[i, j] = 0.0
-                    flux_N_x[i, j] = 0.0
-                    flux_S_x[i, j] = 0.0
-                else
-                    donor_j = fx > 0.0 ? j : j + 1
-                    m_d = m_fe[i, donor_j]
-                    if m_d > 0.0
-                        flux_H_x[i, j] = fx * (m_fe_H[i, donor_j] / m_d)
-                        flux_C_x[i, j] = fx * (m_fe_C[i, donor_j] / m_d)
-                        flux_N_x[i, j] = fx * (m_fe_N[i, donor_j] / m_d)
-                        flux_S_x[i, j] = fx * (m_fe_S[i, donor_j] / m_d)
-                    else
-                        flux_H_x[i, j] = 0.0
-                        flux_C_x[i, j] = 0.0
-                        flux_N_x[i, j] = 0.0
-                        flux_S_x[i, j] = 0.0
-                    end
-                end
-            end
-
-            @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
-                fy = flux_y[i, j]
-                if iszero(fy)
-                    flux_H_y[i, j] = 0.0
-                    flux_C_y[i, j] = 0.0
-                    flux_N_y[i, j] = 0.0
-                    flux_S_y[i, j] = 0.0
-                else
-                    donor_i = fy > 0.0 ? i : i + 1
-                    m_d = m_fe[donor_i, j]
-                    if m_d > 0.0
-                        flux_H_y[i, j] = fy * (m_fe_H[donor_i, j] / m_d)
-                        flux_C_y[i, j] = fy * (m_fe_C[donor_i, j] / m_d)
-                        flux_N_y[i, j] = fy * (m_fe_N[donor_i, j] / m_d)
-                        flux_S_y[i, j] = fy * (m_fe_S[donor_i, j] / m_d)
-                    else
-                        flux_H_y[i, j] = 0.0
-                        flux_C_y[i, j] = 0.0
-                        flux_N_y[i, j] = 0.0
-                        flux_S_y[i, j] = 0.0
-                    end
-                end
-            end
-        end
-
-        # 5. Conservative update of cell metal masses
-        @inbounds for j in 1:Nx_val, i in 1:Ny_val
-            F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
-            F_e = (j < Nx_val) ? flux_x[i, j] : 0.0
-            F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
-            F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
-            m_fe[i, j] += (F_w - F_e + F_n - F_s)
-
-            if track_volatiles
-                F_H_w = (j > 1) ? flux_H_x[i, j - 1] : 0.0
-                F_H_e = (j < Nx_val) ? flux_H_x[i, j] : 0.0
-                F_H_n = (i > 1) ? flux_H_y[i - 1, j] : 0.0
-                F_H_s = (i < Ny_val) ? flux_H_y[i, j] : 0.0
-                m_fe_H[i, j] += (F_H_w - F_H_e + F_H_n - F_H_s)
-
-                F_C_w = (j > 1) ? flux_C_x[i, j - 1] : 0.0
-                F_C_e = (j < Nx_val) ? flux_C_x[i, j] : 0.0
-                F_C_n = (i > 1) ? flux_C_y[i - 1, j] : 0.0
-                F_C_s = (i < Ny_val) ? flux_C_y[i, j] : 0.0
-                m_fe_C[i, j] += (F_C_w - F_C_e + F_C_n - F_C_s)
-
-                F_N_w = (j > 1) ? flux_N_x[i, j - 1] : 0.0
-                F_N_e = (j < Nx_val) ? flux_N_x[i, j] : 0.0
-                F_N_n = (i > 1) ? flux_N_y[i - 1, j] : 0.0
-                F_N_s = (i < Ny_val) ? flux_N_y[i, j] : 0.0
-                m_fe_N[i, j] += (F_N_w - F_N_e + F_N_n - F_N_s)
-
-                F_S_w = (j > 1) ? flux_S_x[i, j - 1] : 0.0
-                F_S_e = (j < Nx_val) ? flux_S_x[i, j] : 0.0
-                F_S_n = (i > 1) ? flux_S_y[i - 1, j] : 0.0
-                F_S_s = (i < Ny_val) ? flux_S_y[i, j] : 0.0
-                m_fe_S[i, j] += (F_S_w - F_S_e + F_S_n - F_S_s)
-            end
-        end
-
-        # 6. Gravitational potential energy dissipation heating
-        @inbounds for j in 1:Nx_val, i in 1:Ny_val
-            w_c = W_cell[i, j]
-            if w_c > 0.0
-                F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
-                F_e = (j < Nx_val) ? flux_x[i, j] : 0.0
-                F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
-                F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
-                Q_diss = _realised_flux_heating(
-                    drho_cell[i, j],
-                    g_acc_cell[i, j],
-                    F_w,
-                    F_e,
-                    F_n,
-                    F_s,
-                    dx_val,
-                    dy_val,
-                    w_c * max(1.0, markers_full_cell / max(M_rock_markers[i, j], 1)),
-                    dt_sub,
-                )
-                total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
-                if Q_seg_grid !== nothing
-                    dQ = Q_diss * (dt_sub / dt)
-                    _add_cell_source_to_p_grid!(Q_seg_grid, i, j, Ny_val, Nx_val, dQ)
-                end
+            fy = flux_y[i, j]
+            if !iszero(fy)
+                di = fy > 0.0 ? i : i + 1
+                ri = fy > 0.0 ? i + 1 : i
+                dV = abs(fy)
+                dE = (rhocp_m * T_star_cell[di, j] - rhocp_s * T_star_cell[ri, j]) * dV
+                outflow_tot[di, j] -= dE
+                outflow_tot[ri, j] += dE
             end
         end
     end
 
-    # Distribute net cell mass changes to markers in each cell
+    sub_diss_energy = 0.0
+    @inbounds for j in 1:Nx_val, i in 1:Ny_val
+        w_c = W_cell[i, j]
+        F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
+        F_e = (j < Nx_val) ? flux_x[i, j] : 0.0
+        F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
+        F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
+
+        if sensible_heat_exchange && w_c > 0.0
+            phi_old = clamp(m_fe[i, j] / w_c, 0.0, 1.0)
+            C_old = (1.0 - phi_old) * rhocp_s + phi_old * rhocp_m
+            E_old = C_old * T_star_cell[i, j]
+            m_new = m_fe[i, j] + (F_w - F_e + F_n - F_s)
+            phi_new = clamp(m_new / w_c, 0.0, 1.0)
+            C_new = (1.0 - phi_new) * rhocp_s + phi_new * rhocp_m
+            if C_new > 0.0
+                T_star_cell[i, j] = (E_old + outflow_tot[i, j] / w_c) / C_new
+            end
+            m_fe[i, j] = m_new
+        else
+            m_fe[i, j] += (F_w - F_e + F_n - F_s)
+        end
+
+        if w_c > 0.0 && dissipation_heating
+            Q_diss = _realised_flux_heating(
+                drho_cell[i, j],
+                g_acc_cell[i, j],
+                F_w,
+                F_e,
+                F_n,
+                F_s,
+                dx_val,
+                dy_val,
+                w_c * max(1.0, markers_full_cell / max(M_rock_markers[i, j], 1)),
+                dt_sub_cur,
+            )
+            sub_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub_cur
+            if Q_seg_grid !== nothing
+                dQ = Q_diss * (dt_sub_cur / dt)
+                _add_cell_source_to_p_grid!(Q_seg_grid, i, j, Ny_val, Nx_val, dQ)
+            end
+        end
+    end
+
+    return sub_diss_energy
+end
+
+"""
+Deposit conservative sensible-heat source from converged subcycle T_star_cell onto Q_seg_grid.
+
+$(SIGNATURES)
+"""
+function _deposit_metal_sensible_heat!(
+    Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}},
+    T_star_cell::Matrix{Float64},
+    T_cell::Matrix{Float64},
+    W_cell::Matrix{Float64},
+    M_fe_cell::Matrix{Float64},
+    M_rock_markers::Matrix{Int},
+    Nx_val::Int,
+    Ny_val::Int,
+    dx_val::Float64,
+    dy_val::Float64,
+    dt::Float64,
+    markers_full_cell::Float64;
+    rhocp_s::Float64,
+    rhocp_m::Float64,
+)::Float64
+    total_sens = 0.0
+    @inbounds for j in 1:Nx_val, i in 1:Ny_val
+        w_c = W_cell[i, j]
+        if w_c <= 0.0
+            continue
+        end
+        phi_0 = clamp(M_fe_cell[i, j] / w_c, 0.0, 1.0)
+        C_init = (1.0 - phi_0) * rhocp_s + phi_0 * rhocp_m
+        w_full = w_c * max(1.0, markers_full_cell / max(M_rock_markers[i, j], 1))
+        Q_sens = (w_c / w_full) * C_init * (T_star_cell[i, j] - T_cell[i, j]) / dt
+        total_sens += Q_sens * (dx_val * dy_val) * dt
+        if Q_seg_grid !== nothing && !iszero(Q_sens)
+            _add_cell_source_to_p_grid!(Q_seg_grid, i, j, Ny_val, Nx_val, Q_sens)
+        end
+    end
+    return total_sens
+end
+
+"""
+Redistribute updated cell metal and volatile inventories back to markers while preserving solid metal.
+
+$(SIGNATURES)
+"""
+function _redistribute_metal_markers!(
+    Xfe_bulk::AbstractVector{Float64},
+    Xfem::AbstractVector{Float64},
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{<:Integer},
+    marknum::Int,
+    m_fe::Matrix{Float64},
+    M_fe_cell::Matrix{Float64},
+    m_solid_cell::Matrix{Float64},
+    cap_cell::Matrix{Float64},
+    W_cell::Matrix{Float64},
+    cfg_core::CoreFormationConfig;
+    Xfe_H_m::Union{Nothing,AbstractVector{Float64}},
+    Xfe_C_m::Union{Nothing,AbstractVector{Float64}},
+    Xfe_N_m::Union{Nothing,AbstractVector{Float64}},
+    Xfe_S_m::Union{Nothing,AbstractVector{Float64}},
+    m_fe_H::Matrix{Float64},
+    m_fe_C::Matrix{Float64},
+    m_fe_N::Matrix{Float64},
+    m_fe_S::Matrix{Float64},
+    track_volatiles::Bool,
+    xcenter::Float64,
+    ycenter::Float64,
+    rplanet::Float64,
+    dx_val::Float64,
+    dy_val::Float64,
+    Nx_val::Int,
+    Ny_val::Int,
+    dr_min::Float64,
+    spherical_metric::Bool,
+    w3d_m::Union{Nothing,AbstractVector{<:Real}},
+)::Float64
     initial_sum = 0.0
     initial_sum_H = 0.0
     initial_sum_C = 0.0
@@ -1000,13 +1198,15 @@ function apply_metal_segregation!(
                             Xfe_bulk[m] = clamp(Xfe_bulk[m], 0.0, cfg_core.phi_pack)
                         end
                     elseif dm_cell < 0.0
-                        if m_init > 0.0
-                            scale_loss = max(m_target / m_init, 0.0)
+                        m_molten_init = max(m_init - m_solid_cell[i_c, j_c], 0.0)
+                        if m_molten_init > 0.0
+                            frac_loss = clamp(-dm_cell / m_molten_init, 0.0, 1.0)
+                            xfem_eff = min(max(Xfem[m], 0.0), Xfe_bulk[m])
                             Xfe_bulk[m] = clamp(
-                                Xfe_bulk[m] * scale_loss, 0.0, cfg_core.phi_pack
+                                Xfe_bulk[m] - frac_loss * xfem_eff, 0.0, cfg_core.phi_pack
                             )
                         else
-                            Xfe_bulk[m] = 0.0
+                            Xfe_bulk[m] = clamp(Xfe_bulk[m], 0.0, cfg_core.phi_pack)
                         end
                     else
                         Xfe_bulk[m] = clamp(Xfe_bulk[m], 0.0, cfg_core.phi_pack)
@@ -1031,7 +1231,19 @@ function apply_metal_segregation!(
         end
     end
 
-    # Enforce floating point conservation without creating out-of-bounds markers
+    raw_sum = 0.0
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                w_m = _marker_segregation_weight(m, rmark, dr_min, spherical_metric, w3d_m)
+                raw_sum += Xfe_bulk[m] * w_m
+            end
+        end
+    end
+    raw_conservation_rel_error =
+        initial_sum > 0.0 ? abs(raw_sum - initial_sum) / initial_sum : 0.0
+
     _conserve_weighted_marker_fraction!(
         Xfe_bulk,
         nothing,
@@ -1050,7 +1262,6 @@ function apply_metal_segregation!(
         w3d_m=w3d_m,
     )
 
-    # Enforce volatile mass conservation across planet markers
     if track_volatiles
         cur_sum_H = 0.0
         cur_sum_C = 0.0
@@ -1103,7 +1314,521 @@ function apply_metal_segregation!(
         end
     end
 
-    # Keep molten metal fraction Xfem consistent with newly segregated bulk metal
+    return raw_conservation_rel_error
+end
+
+"""
+Apply iron metal segregation via sub-cycled conservative drift-flux transport.
+
+$(SIGNATURES)
+
+Solves the conservative drift-flux transport equation for molten iron metal
+percolation through a solid silicate matrix and Stokes settling through a magma ocean.
+Subcycles the explicit finite-volume transport step using active-face characteristic wave
+speeds, preserves solid metal fractions under partial melting, and accumulates both
+gravitational dissipation and two-phase counterflow sensible-heat exchange on `Q_seg_grid`.
+
+References:
+- Stevenson (1990), Fluid dynamics of core formation.
+- Roscoe (1952), Br. J. Appl. Phys., 3(8), 267-269.
+- Deguen et al. (2014), Earth Planet. Sci. Lett., 391, 274-287.
+- Lichtenberg et al. (2019, 2021), Science / JGR Planets.
+
+# Arguments
+- `xm::AbstractVector{Float64}`: Marker x-coordinates [m]
+- `ym::AbstractVector{Float64}`: Marker y-coordinates [m]
+- `tm::AbstractVector{<:Integer}`: Marker material phase type
+- `tkm::AbstractVector{Float64}`: Marker temperature [K]
+- `phim::AbstractVector{Float64}`: Marker silicate melt fraction / porosity [-]
+- `Xfe_bulk::AbstractVector{Float64}`: Marker bulk metal volume fraction [-]
+- `Xfem::AbstractVector{Float64}`: Marker molten metal fraction [-]
+- `marknum::Integer`: Number of markers
+- `dt::Real`: Timestep duration [s]
+- `cfg_core::CoreFormationConfig`: Core formation configuration parameters
+
+# Keyword Arguments
+- `coords::GridCoordinates=default_grid_coordinates()`: `GridCoordinates` domain geometry struct
+- `xcenter::Real=coords.xcenter`: Planet center x [m]
+- `ycenter::Real=coords.ycenter`: Planet center y [m]
+- `rplanet::Real=50000.0`: Planet radius [m]
+- `g_surf::Real=0.1`: Reference surface gravity magnitude [m/s^2]
+- `gx::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional x-gravity on grid [m/s^2]
+- `gy::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional y-gravity on grid [m/s^2]
+- `Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional grid to accumulate dissipation and sensible heating [W/m^3]
+- `rho_silicate::Real=3000.0`: Reference solid silicate density [kg/m^3]
+- `rho_silicate_melt::Union{Nothing,Real}=nothing`: Silicate melt density [kg/m^3] (defaults to `rho_silicate`)
+- `rhocp_silicate::Real=3.3e6`: Silicate volumetric heat capacity [J/(m^3 K)]
+- `eta_silicate::Real=1.0e18`: Reference solid silicate viscosity [Pa s]
+- `eta_silicate_hot::Union{Nothing,Real}=nothing`: Hot silicate viscosity above `tmsolidphase` [Pa s] (defaults to `eta_silicate`)
+- `tmsolidphase::Real=1400.0`: Temperature threshold separating cold and hot silicate viscosity [K]
+- `alpha_eta::Real=28.0`: Melt-weakening exponent below `phi_crit_silicate` [-]
+- `phi_crit_silicate::Real=0.4`: Critical silicate melt fraction [-]
+- `eta_melt_silicate::Real=10.0`: Pure silicate melt viscosity [Pa s]
+- `etamax::Real=1.0e23`: Upper silicate suspension viscosity ceiling [Pa s]
+- `ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional matrix viscosity on grid [Pa s]
+- `Fm::Union{Nothing,AbstractVector{Float64}}=nothing`: Marker silicate melt fraction [-]
+- `T_solidus_silicate::Real=1400.0`: Reference silicate solidus temperature [K]
+- `T_liquidus_silicate::Real=1800.0`: Reference silicate liquidus temperature [K]
+- `sensible_heat_exchange::Bool=true`: Include two-phase counterflow sensible-heat exchange on `Q_seg_grid`
+- `dissipation_heating::Bool=cfg_core.segregation_heating`: Include gravitational dissipation heating on `Q_seg_grid`
+- `spherical_metric::Bool=true`: Weight marker and cell inventories by 3D spherical shell weight
+- `w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing`: Optional precomputed marker out-of-plane weights [m]
+
+# Returns
+- NamedTuple `(; max_v_seg, max_v_char, n_subcycles, dt_sub, total_dissipation_energy, total_sensible_energy, raw_conservation_rel_error)`.
+"""
+function apply_metal_segregation!(
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{<:Integer},
+    tkm::AbstractVector{Float64},
+    phim::AbstractVector{Float64},
+    Xfe_bulk::AbstractVector{Float64},
+    Xfem::AbstractVector{Float64},
+    marknum::Integer,
+    dt::Real,
+    cfg_core::CoreFormationConfig;
+    coords::GridCoordinates=default_grid_coordinates(),
+    xcenter::Real=coords.xcenter,
+    ycenter::Real=coords.ycenter,
+    rplanet::Real=50000.0,
+    g_surf::Real=0.1,
+    gx::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    gy::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    rho_silicate::Real=3000.0,
+    rho_silicate_melt::Union{Nothing,Real}=nothing,
+    rhocp_silicate::Real=3.3e6,
+    eta_silicate::Real=1.0e18,
+    eta_silicate_hot::Union{Nothing,Real}=nothing,
+    tmsolidphase::Real=1400.0,
+    alpha_eta::Real=28.0,
+    phi_crit_silicate::Real=0.4,
+    eta_melt_silicate::Real=10.0,
+    etamax::Real=1.0e23,
+    ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    T_solidus_silicate::Real=1400.0,
+    T_liquidus_silicate::Real=1800.0,
+    Xfe_H_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_C_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_N_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_S_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    cfg_partition::Union{Nothing,MetalPartitionConfig}=nothing,
+    sensible_heat_exchange::Bool=true,
+    dissipation_heating::Bool=cfg_core.segregation_heating,
+    spherical_metric::Bool=true,
+    w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
+    workspace=nothing,
+)
+    if (!cfg_core.percolation_active && !cfg_core.settling_active) ||
+        dt <= 0.0 ||
+        marknum <= 0
+        return _empty_metal_segregation_result()
+    end
+
+    track_volatiles = (
+        cfg_partition !== nothing &&
+        cfg_partition.active &&
+        Xfe_H_m !== nothing &&
+        Xfe_C_m !== nothing &&
+        Xfe_N_m !== nothing &&
+        Xfe_S_m !== nothing
+    )
+
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                xfe = Xfe_bulk[m]
+                if !isfinite(xfe) || xfe < 0.0 || xfe > cfg_core.phi_pack + 1.0e-7
+                    throw(
+                        DomainError(
+                            xfe,
+                            "Marker bulk metal fraction must be finite, non-negative, and <= phi_pack",
+                        ),
+                    )
+                end
+            end
+        end
+    end
+
+    Nx_val = coords.Nx
+    Ny_val = coords.Ny
+    dx_val = coords.dx
+    dy_val = coords.dy
+    dr_min = min(dx_val, dy_val)
+
+    has_ws = (
+        workspace !== nothing &&
+        size(workspace.M_fe_cell) == (Ny_val, Nx_val) &&
+        size(workspace.T_star_cell) == (Ny_val, Nx_val) &&
+        (!track_volatiles || size(workspace.M_fe_H_cell) == (Ny_val, Nx_val))
+    )
+
+    M_fe_cell = has_ws ? fill!(workspace.M_fe_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    M_rock_markers =
+        has_ws ? fill!(workspace.M_rock_markers, 0) : zeros(Int, Ny_val, Nx_val)
+    W_cell = has_ws ? fill!(workspace.W_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    v_seg_cell = has_ws ? fill!(workspace.v_seg_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    phi_m_cell = has_ws ? fill!(workspace.phi_m_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    F_m_cell = has_ws ? fill!(workspace.F_m_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    v_perc_cell =
+        has_ws ? fill!(workspace.v_perc_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    g_acc_cell = has_ws ? fill!(workspace.g_acc_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    cap_cell = has_ws ? fill!(workspace.cap_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    phi_trap_cell =
+        has_ws ? fill!(workspace.phi_trap_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    T_cell = has_ws ? fill!(workspace.T_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    drho_cell = has_ws ? fill!(workspace.drho_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    m_solid_cell =
+        has_ws ? fill!(workspace.m_solid_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    v_stokes0_cell =
+        has_ws ? fill!(workspace.v_stokes0_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    v_char_cell =
+        has_ws ? fill!(workspace.v_char_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    T_star_cell =
+        has_ws ? fill!(workspace.T_star_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+
+    M_fe_H_cell = if track_volatiles
+        has_ws ? fill!(workspace.M_fe_H_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    else
+        zeros(Float64, 0, 0)
+    end
+    M_fe_C_cell = if track_volatiles
+        has_ws ? fill!(workspace.M_fe_C_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    else
+        zeros(Float64, 0, 0)
+    end
+    M_fe_N_cell = if track_volatiles
+        has_ws ? fill!(workspace.M_fe_N_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    else
+        zeros(Float64, 0, 0)
+    end
+    M_fe_S_cell = if track_volatiles
+        has_ws ? fill!(workspace.M_fe_S_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    else
+        zeros(Float64, 0, 0)
+    end
+
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
+                i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
+                w_m = _marker_segregation_weight(m, rmark, dr_min, spherical_metric, w3d_m)
+                fe_m = Xfe_bulk[m]
+                xfem_eff = min(max(Xfem[m], 0.0), fe_m)
+                M_fe_cell[i_c, j_c] += fe_m * w_m
+                M_rock_markers[i_c, j_c] += 1
+                W_cell[i_c, j_c] += w_m
+                phi_m_cell[i_c, j_c] += xfem_eff * w_m
+                T_cell[i_c, j_c] += tkm[m] * w_m
+                F_m_val = if Fm !== nothing
+                    Fm[m]
+                elseif tkm[m] >= T_solidus_silicate &&
+                    T_liquidus_silicate > T_solidus_silicate
+                    clamp(
+                        (tkm[m] - T_solidus_silicate) /
+                        (T_liquidus_silicate - T_solidus_silicate),
+                        0.0,
+                        1.0,
+                    )
+                else
+                    0.0
+                end
+                F_m_cell[i_c, j_c] += F_m_val * w_m
+                cap_cell[i_c, j_c] += max(cfg_core.phi_pack - fe_m, 0.0) * w_m
+
+                if track_volatiles
+                    M_fe_H_cell[i_c, j_c] += fe_m * w_m * Xfe_H_m[m]
+                    M_fe_C_cell[i_c, j_c] += fe_m * w_m * Xfe_C_m[m]
+                    M_fe_N_cell[i_c, j_c] += fe_m * w_m * Xfe_N_m[m]
+                    M_fe_S_cell[i_c, j_c] += fe_m * w_m * Xfe_S_m[m]
+                end
+            end
+        end
+    end
+
+    rho_sil_solid_val = Float64(rho_silicate)
+    rho_sil_melt_val =
+        rho_silicate_melt === nothing ? rho_sil_solid_val : Float64(rho_silicate_melt)
+    eta_sil_cold_val = Float64(eta_silicate)
+    eta_sil_hot_val =
+        eta_silicate_hot === nothing ? eta_sil_cold_val : Float64(eta_silicate_hot)
+    rhocp_s = Float64(rhocp_silicate)
+    rhocp_m = Float64(cfg_core.rhocp_metal)
+
+    _precompute_metal_cell_coefficients!(
+        phi_trap_cell,
+        phi_m_cell,
+        F_m_cell,
+        T_cell,
+        T_star_cell,
+        W_cell,
+        g_acc_cell,
+        drho_cell,
+        v_stokes0_cell,
+        m_solid_cell,
+        M_fe_cell,
+        M_fe_S_cell;
+        xcenter=Float64(xcenter),
+        ycenter=Float64(ycenter),
+        rplanet=Float64(rplanet),
+        dx_val=dx_val,
+        dy_val=dy_val,
+        Nx_val=Nx_val,
+        Ny_val=Ny_val,
+        g_surf=Float64(g_surf),
+        gx=gx,
+        gy=gy,
+        rho_sil_solid=rho_sil_solid_val,
+        rho_sil_melt=rho_sil_melt_val,
+        eta_sil_cold=eta_sil_cold_val,
+        eta_sil_hot=eta_sil_hot_val,
+        tmsolidphase=Float64(tmsolidphase),
+        alpha_eta=Float64(alpha_eta),
+        phi_crit_silicate=Float64(phi_crit_silicate),
+        eta_melt_silicate=Float64(eta_melt_silicate),
+        etamax=Float64(etamax),
+        ETA=ETA,
+        track_volatiles=track_volatiles,
+        cfg_partition=cfg_partition,
+        cfg_core=cfg_core,
+    )
+
+    m_fe = has_ws ? copyto!(workspace.m_fe, M_fe_cell) : copy(M_fe_cell)
+    m_fe_H = if track_volatiles
+        (has_ws ? copyto!(workspace.m_fe_H, M_fe_H_cell) : copy(M_fe_H_cell))
+    else
+        zeros(Float64, 0, 0)
+    end
+    m_fe_C = if track_volatiles
+        (has_ws ? copyto!(workspace.m_fe_C, M_fe_C_cell) : copy(M_fe_C_cell))
+    else
+        zeros(Float64, 0, 0)
+    end
+    m_fe_N = if track_volatiles
+        (has_ws ? copyto!(workspace.m_fe_N, M_fe_N_cell) : copy(M_fe_N_cell))
+    else
+        zeros(Float64, 0, 0)
+    end
+    m_fe_S = if track_volatiles
+        (has_ws ? copyto!(workspace.m_fe_S, M_fe_S_cell) : copy(M_fe_S_cell))
+    else
+        zeros(Float64, 0, 0)
+    end
+
+    flux_H_x = if track_volatiles
+        (has_ws ? fill!(workspace.flux_H_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1))
+    else
+        zeros(Float64, 0, 0)
+    end
+    flux_H_y = if track_volatiles
+        (has_ws ? fill!(workspace.flux_H_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val))
+    else
+        zeros(Float64, 0, 0)
+    end
+    flux_C_x = if track_volatiles
+        (has_ws ? fill!(workspace.flux_C_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1))
+    else
+        zeros(Float64, 0, 0)
+    end
+    flux_C_y = if track_volatiles
+        (has_ws ? fill!(workspace.flux_C_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val))
+    else
+        zeros(Float64, 0, 0)
+    end
+    flux_N_x = if track_volatiles
+        (has_ws ? fill!(workspace.flux_N_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1))
+    else
+        zeros(Float64, 0, 0)
+    end
+    flux_N_y = if track_volatiles
+        (has_ws ? fill!(workspace.flux_N_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val))
+    else
+        zeros(Float64, 0, 0)
+    end
+    flux_S_x = if track_volatiles
+        (has_ws ? fill!(workspace.flux_S_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1))
+    else
+        zeros(Float64, 0, 0)
+    end
+    flux_S_y = if track_volatiles
+        (has_ws ? fill!(workspace.flux_S_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val))
+    else
+        zeros(Float64, 0, 0)
+    end
+
+    req_flux_x =
+        has_ws ? fill!(workspace.req_flux_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
+    req_flux_y =
+        has_ws ? fill!(workspace.req_flux_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
+    flux_x = has_ws ? fill!(workspace.flux_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
+    flux_y = has_ws ? fill!(workspace.flux_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
+    outflow_tot =
+        has_ws ? fill!(workspace.outflow_tot, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    inflow_tot = has_ws ? fill!(workspace.inflow_tot, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    alpha_out = has_ws ? fill!(workspace.alpha_out, 1.0) : ones(Float64, Ny_val, Nx_val)
+    alpha_in = has_ws ? fill!(workspace.alpha_in, 1.0) : ones(Float64, Ny_val, Nx_val)
+
+    markers_full_cell = (dx_val * dy_val) / (coords.dxm * coords.dym)
+    dt_val = Float64(dt)
+    t_rem = dt_val
+    total_t_stepped = 0.0
+    n_sub = 0
+    max_v_seen = 0.0
+    max_char_seen = 0.0
+    total_diss_energy = 0.0
+
+    while t_rem > 1.0e-12 * dt_val && n_sub < cfg_core.max_subcycles
+        rates = _compute_metal_subcycle_rates!(
+            req_flux_x,
+            req_flux_y,
+            outflow_tot,
+            inflow_tot,
+            v_seg_cell,
+            v_char_cell,
+            v_perc_cell,
+            m_fe,
+            m_solid_cell,
+            W_cell,
+            F_m_cell,
+            phi_trap_cell;
+            v_stokes0_cell=v_stokes0_cell,
+            drho_cell=drho_cell,
+            g_acc_cell=g_acc_cell,
+            cfg_core=cfg_core,
+            gx=gx,
+            gy=gy,
+            xcenter=Float64(xcenter),
+            ycenter=Float64(ycenter),
+            dx_val=dx_val,
+            dy_val=dy_val,
+            Nx_val=Nx_val,
+            Ny_val=Ny_val,
+        )
+        if rates.max_char_active <= 0.0
+            break
+        end
+        max_v_seen = max(max_v_seen, rates.max_v_active)
+        max_char_seen = max(max_char_seen, rates.max_char_active)
+        dt_cfl_sub = cfg_core.cfl_settling * dr_min / rates.max_char_active
+        dt_sub_cur = min(t_rem, dt_cfl_sub)
+
+        total_diss_energy += _step_metal_fluxes_and_enthalpy!(
+            m_fe,
+            m_solid_cell,
+            W_cell,
+            T_star_cell,
+            phi_trap_cell,
+            flux_x,
+            flux_y,
+            outflow_tot,
+            inflow_tot,
+            alpha_out,
+            alpha_in,
+            req_flux_x;
+            req_flux_y=req_flux_y,
+            drho_cell=drho_cell,
+            g_acc_cell=g_acc_cell,
+            M_rock_markers=M_rock_markers,
+            Q_seg_grid=Q_seg_grid,
+            m_fe_H=m_fe_H,
+            m_fe_C=m_fe_C,
+            m_fe_N=m_fe_N,
+            m_fe_S=m_fe_S,
+            flux_H_x=flux_H_x,
+            flux_H_y=flux_H_y,
+            flux_C_x=flux_C_x,
+            flux_C_y=flux_C_y,
+            flux_N_x=flux_N_x,
+            flux_N_y=flux_N_y,
+            flux_S_x=flux_S_x,
+            flux_S_y=flux_S_y,
+            dt_sub_cur=dt_sub_cur,
+            dt=dt_val,
+            dx_val=dx_val,
+            dy_val=dy_val,
+            Nx_val=Nx_val,
+            Ny_val=Ny_val,
+            markers_full_cell=markers_full_cell,
+            phi_pack=cfg_core.phi_pack,
+            rhocp_m=rhocp_m,
+            rhocp_s=rhocp_s,
+            dissipation_heating=dissipation_heating,
+            sensible_heat_exchange=sensible_heat_exchange,
+            track_volatiles=track_volatiles,
+        )
+        total_t_stepped += dt_sub_cur
+        t_rem -= dt_sub_cur
+        n_sub += 1
+    end
+
+    if n_sub == 0
+        return _empty_metal_segregation_result()
+    end
+
+    if t_rem > 1.0e-12 * dt_val && n_sub >= cfg_core.max_subcycles
+        @warn "CFL subcycling reached max_subcycles $(cfg_core.max_subcycles) with $(t_rem) s remaining; segregation transport throttled" maxlog=10
+    end
+
+    total_sens_energy = if sensible_heat_exchange
+        _deposit_metal_sensible_heat!(
+            Q_seg_grid,
+            T_star_cell,
+            T_cell,
+            W_cell,
+            M_fe_cell,
+            M_rock_markers,
+            Nx_val,
+            Ny_val,
+            dx_val,
+            dy_val,
+            dt_val,
+            markers_full_cell;
+            rhocp_s=rhocp_s,
+            rhocp_m=rhocp_m,
+        )
+    else
+        0.0
+    end
+
+    raw_conservation_rel_error = _redistribute_metal_markers!(
+        Xfe_bulk,
+        Xfem,
+        xm,
+        ym,
+        tm,
+        Int(marknum),
+        m_fe,
+        M_fe_cell,
+        m_solid_cell,
+        cap_cell,
+        W_cell,
+        cfg_core;
+        Xfe_H_m=Xfe_H_m,
+        Xfe_C_m=Xfe_C_m,
+        Xfe_N_m=Xfe_N_m,
+        Xfe_S_m=Xfe_S_m,
+        m_fe_H=m_fe_H,
+        m_fe_C=m_fe_C,
+        m_fe_N=m_fe_N,
+        m_fe_S=m_fe_S,
+        track_volatiles=track_volatiles,
+        xcenter=Float64(xcenter),
+        ycenter=Float64(ycenter),
+        rplanet=Float64(rplanet),
+        dx_val=dx_val,
+        dy_val=dy_val,
+        Nx_val=Nx_val,
+        Ny_val=Ny_val,
+        dr_min=dr_min,
+        spherical_metric=spherical_metric,
+        w3d_m=w3d_m,
+    )
+
     @inbounds for m in 1:marknum
         if tm[m] < 3
             F_fe = compute_metal_melt_fraction(
@@ -1116,10 +1841,13 @@ function apply_metal_segregation!(
     end
 
     return (;
-        max_v_seg=max_v,
+        max_v_seg=max_v_seen,
+        max_v_char=max_char_seen,
         n_subcycles=n_sub,
-        dt_sub=dt_sub,
+        dt_sub=total_t_stepped / n_sub,
         total_dissipation_energy=total_diss_energy,
+        total_sensible_energy=total_sens_energy,
+        raw_conservation_rel_error=raw_conservation_rel_error,
     )
 end
 

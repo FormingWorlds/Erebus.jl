@@ -233,7 +233,11 @@ function advance_step_diagnostics!(
         )
     )
 
-    if (cfg.metal_partition.active && state.markers.Xfe_bulk !== nothing) &&
+    core_diag_active =
+        cfg.coreformation.percolation_active ||
+        cfg.coreformation.settling_active ||
+        cfg.metal_partition.active
+    if (core_diag_active && state.markers.Xfe_bulk !== nothing) &&
         (need_telemetry || should_save_snapshot || cfg.hydrothermal.active)
         core_budgets = compute_core_volatile_budgets(
             state.markers.xm,
@@ -254,15 +258,15 @@ function advance_step_diagnostics!(
             core_radius_fraction=cfg.metal_partition.core_radius_fraction,
             phi_core_threshold=cfg.metal_partition.phi_core_threshold,
         )
-        state.accumulators.core_budgets = core_budgets
-        if (core_budgets !== nothing && core_budgets.M_core_metal > 0.0)
-            state.accumulators.rcore =
-                (3.0 * core_budgets.M_core_metal / (4.0 * π * cfg.coreformation.rho_metal))^(
-                    1.0 / 3.0
-                )
-        else
-            state.accumulators.rcore = 0.0
+        if cfg.metal_partition.active
+            state.accumulators.core_budgets = core_budgets
         end
+        state.accumulators.rcore =
+            if core_budgets !== nothing && core_budgets.V_core_total > 0.0
+                cbrt(3.0 * core_budgets.V_core_total / (4.0 * π))
+            else
+                0.0
+            end
     end
 
     if need_telemetry

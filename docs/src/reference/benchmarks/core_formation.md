@@ -8,34 +8,39 @@ This page documents the physical formulation, mathematical limits, and numerical
 
 Early planetary differentiation separates dense metallic iron from lighter silicate rock to form a central metallic core and an overlying silicate mantle. In early Solar System planetesimals, this differentiation is driven by internal decay heating from short-lived radionuclides ($^{26}\text{Al}$ and $^{60}\text{Fe}$).
 
-The Fe-FeS binary system has a low eutectic temperature ($T_{\text{eutectic}} \approx 1213\text{ K}$), melting hundreds of Kelvin below the silicate solidus ($T_{\text{solidus}} \approx 1400\text{ K}$). Metal-silicate segregation operates in two distinct physical regimes:
+Iron-nickel-sulfur metal starts melting at $T_{\text{eutectic}} \approx 1213\text{ K}$ (lowered below the $\sim 1261\text{ K}$ pure Fe-FeS eutectic by Ni, P, and C), below the silicate solidus ($T_{\text{solidus}} \approx 1400\text{ K}$).
+Metal-silicate segregation spans three transport intervals:
 
-1. **Porous Percolation Regime ($F_m \le 0.40$)**: In crystalline silicate rock, liquid Fe-FeS melt percolates along mineral grain boundaries under gravity once the liquid metal fraction exceeds the percolation threshold ($\phi_{\text{crit}} \approx 0.05$). The flow is governed by porous Darcy dynamics with Kozeny-Carman permeability.
-2. **Magma Ocean Stokes Settling Regime ($F_m \ge 0.50$)**: When silicate melting exceeds the rheological transition threshold ($\phi_{\text{rheo}} \approx 0.40$), the rigid crystalline framework breaks down into a low-viscosity crystal suspension. Dense liquid metal emulsifies into droplets whose diameter is governed by capillary-hydrodynamic balance. Droplets sink rapidly through the magma ocean following Stokes drag with hindered settling corrections.
-3. **Continuous Mush Handover**: In the transition mush zone ($F_m \in [0.40, 0.50]$), segregation velocity blends smoothly between porous percolation and droplet settling via a cubic Hermite polynomial.
-4. **Dissipation Energetics**: Sinking metal releases gravitational potential energy. This gravitational energy is dissipated as frictional heat. In a body of this size the heat is small against radiogenic heating.
-5. **Property Blending**: Bulk density, thermal conductivity, and volumetric heat capacity update dynamically in space as metal migrates toward the planetary center.
+1. **Porous Percolation Regime ($F_m < 0.40$)**: In crystalline silicate rock, liquid Fe-FeS melt percolates along mineral grain boundaries under gravity once the liquid metal fraction exceeds the percolation threshold ($\phi_{\text{crit,perc}} \approx 0.05$). The flow is governed by porous Darcy dynamics with Kozeny-Carman permeability.
+2. **Transition Mush Zone ($0.40 \le F_m \le 0.50$)**: Segregation velocity blends porous percolation with droplet settling between `F_settle_start` ($0.40$) and `F_perc_end` ($0.50$). Separately, above `[melting] phi_crit` (default $0.40$), silicate viscosity transitions smoothly into a crystal-suspension regime.
+3. **Magma Ocean Stokes Settling Regime ($F_m > 0.50$)**: Above $F_{\text{perc\_end}}$, metal moves by droplet settling alone. Dense liquid metal emulsifies into droplets whose diameter follows capillary-hydrodynamic balance, and droplets sink through the magma suspension following Stokes drag with hindered-settling corrections.
+
+Segregation also updates thermal energy and bulk cell properties:
+- **Dissipation Energetics**: Sinking metal releases gravitational potential energy as frictional heat, though in a 50 km body this heat is small relative to $^{26}\text{Al}$ heating.
+- **Property Blending**: Bulk density, thermal conductivity, and volumetric heat capacity update dynamically in space as metal migrates toward the planetary center.
 
 ---
 
-### 2. Theoretical Formulation
+## 2. Theoretical Formulation
 
-The physical theory, chemical equation of state models (Sanloup et al., 2000; Morard et al., 2014), permeability relations, and droplet breakup mechanics are derived in detail in [Iron Core Formation and Metal Segregation](../../explanations/core_formation.md).
+The physical theory, chemical equation of state models ([Sanloup et al., 2000](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation); [Morard et al., 2014](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation)), permeability relations, and droplet breakup mechanics are derived in detail in [Iron Core Formation and Metal Segregation](../../explanations/core_formation.md).
 
 Key constitutive formulations validated on this page include:
 
 - **Mobile Metal Volume Fraction ($\phi_m$):**
-  $$\phi_m = \chi_m(T) \cdot X_{\text{fe,bulk}}, \quad \chi_m(T) = \text{clamp}\left(\frac{T - T_{\text{eutectic}}}{\Delta T_{\text{metal}}}, 0, 1\right)$$
+  $$\phi_m = F_{\text{fe}}(T) \cdot X_{\text{fe,bulk}}, \quad F_{\text{fe}}(T) = \text{clamp}\left(\frac{T - T_{\text{eutectic}}}{\Delta T_{\text{metal}}}, 0, 1\right)$$
 - **Porous Darcy Percolation Velocity ($v_{\text{perc}}$):**
-  $$v_{\text{perc}} = \frac{k_{\text{metal}}(\phi_m)}{\phi_m \, \eta_{\text{metal}}} \Delta\rho \, g \left(\frac{\phi_m - \phi_{\text{residual}}}{\phi_m}\right)$$
-- **Magma Ocean Stokes Settling Velocity ($v_{\text{Stokes}}$):**
-  $$v_{\text{Stokes}} = \frac{2}{9} \frac{\Delta\rho \, g \, r_d^2}{\eta_{\text{silicate}}} f_{\text{HR}} f_{\text{hindered}}$$
-- **Continuous Hermite Handover ($v_{\text{seg}}$):** Smooth $C^1$ transition across the rheological breakdown interval $F_m \in [F_{\text{settle,start}}, F_{\text{perc,end}}]$:
-  $$v_{\text{seg}} = (1 - w) v_{\text{perc}} + w v_{\text{settle}}, \quad w = 3\xi^2 - 2\xi^3$$
-- **Gravitational Dissipation Heating ($Q_{\text{seg}}$):**
-  $$Q_{\text{seg}} = \Delta\rho \, g \, J$$
+  $$v_{\text{perc}} = \frac{k_{\text{metal}}(\phi_m)}{\phi_m \, \eta_{\text{metal}}} \Delta\rho \, g$$
+- **Magma Ocean Stokes Settling Velocity ($v_{\text{settle}}$):**
+  $$v_{\text{settle}} = v_{\text{stokes}} \, h(\phi_m), \quad v_{\text{stokes}} = \frac{2}{9} \frac{\Delta\rho \, g \, r_{\text{drop}}^2}{\eta_{\text{susp}}} C_{\text{HR}}$$
+  where $\eta_{\text{susp}}$ blends exponential melt weakening below $\phi_{\text{crit}}$ smoothly into the crystal-suspension law ([Roscoe, 1952](../bibliography.md#Silicate-Melting-and-Magma-Rheology); [Solomatov, 2015](../bibliography.md#Silicate-Melting-and-Magma-Rheology)) and $\Delta\rho = \rho_{\text{metal}} - \rho_{\text{sil,eff}}$.
+- **Continuous Hermite Handover ($v_{\text{seg}}$):** Smooth $C^1$ transition over the interval $F_m \in [F_{\text{settle\_start}}, F_{\text{perc\_end}}]$:
+  $$v_{\text{seg}} = (1 - \xi) v_{\text{perc}} + \xi v_{\text{settle}}, \quad \xi = 3s^2 - 2s^3$$
+  where $s = (F_m - F_{\text{settle\_start}}) / (F_{\text{perc\_end}} - F_{\text{settle\_start}})$.
+- **Gravitational Dissipation and Counterflow Sensible Heat ($Q_{\text{seg}}$):**
+  $$Q_{\text{seg}} = \Delta\rho \, g \, J_{\text{realized}} + Q_{\text{sens}}$$
 
-  where $J$ is the volume flux density of metal that moves through the cell. Without limits on the flux, $J$ is the mobile metal fraction, which excludes the trapped residual metal, times $v_{\text{seg}}$.
+  where $J_{\text{realized}}$ is the realized face volume flux density over active substeps and $Q_{\text{sens}}$ balances subcycle two-phase enthalpy counterflow between settling metal and rising silicate.
 - **Volume-Weighted Material Property Blending:**
   $$\rho = (1 - X_{\text{fe}}) \rho_{\text{silicate}} + X_{\text{fe}} \rho_{\text{metal}}$$
   $$\rho c_p = (1 - X_{\text{fe}}) (\rho c_p)_{\text{silicate}} + X_{\text{fe}} (\rho c_p)_{\text{metal}}$$
@@ -49,21 +54,19 @@ Metal segregation is solved on the Eulerian grid using a finite-volume drift-flu
 
 ### Local CFL Subcycling
 
-The Stokes-Darcy hydrodynamic timestep $\Delta t_{\text{hydro}}$ is typically governed by silicate convection and thermal diffusion ($\sim 10^3\text{ yr}$). Settling velocities in low-viscosity magma can produce local Courant numbers exceeding unity. To maintain explicit stability, the segregation solver executes adaptive subcycling with an isotropic scalar timestep:
+The Stokes-Darcy hydrodynamic timestep $\Delta t_{\text{hydro}}$ is governed by silicate convection and thermal diffusion ($\sim 10^3\text{ yr}$).
+Explicit stability uses the characteristic speed $v_{\text{char}} = \max(v_{\text{seg}}, |\partial q/\partial \phi_m|)$ at each active face, where $q$ is the metal flux.
+Each adaptive substep satisfies $\Delta t_{\text{sub}} \le \Delta t_{\text{CFL}}$, and at most `max_subcycles` substeps execute per outer step:
 
-$$\Delta t_{\text{CFL}} = \text{cfl\_settling} \cdot \frac{\min(\Delta x, \Delta y)}{\max_{i,j} \|\mathbf{v}_{\text{seg}}\|}$$
-
-$$N_{\text{sub}} = \min\left( \left\lceil \frac{\Delta t_{\text{hydro}}}{\Delta t_{\text{CFL}}} \right\rceil, N_{\text{max}} \right)$$
-
-$$\Delta t_{\text{sub}} = \frac{\Delta t_{\text{hydro}}}{N_{\text{sub}}}$$
+$$\Delta t_{\text{CFL}} = \text{cfl\_settling} \cdot \frac{\min(\Delta x, \Delta y)}{\max_{\text{active faces}} v_{\text{char}}}$$
 
 ### Multi-Dimensional Flux Limiters and Marker Capacity Redistribution
 
 To guarantee strict non-negativity and prevent exceeding maximum packing fraction $\phi_{\text{pack}}$ on 2D staggered grids:
 
-1. **Outflow Limiter**: For cell $(i, j)$ donating metal across horizontal and vertical faces, total face outflow $Out_{\text{total}} = \sum \Phi_{\text{out}} \Delta t_{\text{sub}}$ must not exceed available metal mass $m_{\text{avail}}$. All outward fluxes are scaled by $\alpha_{\text{out}} = \min(1.0, m_{\text{avail}} / Out_{\text{total}})$.
+1. **Outflow Limiter**: For cell $(i, j)$ donating metal through horizontal and vertical faces, total face outflow $Out_{\text{total}} = \sum \Phi_{\text{out}} \Delta t_{\text{sub}}$ must not exceed available metal mass $m_{\text{avail}}$. All outward fluxes are scaled by $\alpha_{\text{out}} = \min(1.0, m_{\text{avail}} / Out_{\text{total}})$.
 2. **Inflow Limiter**: Total incoming flux $In_{\text{total}} = \sum \Phi_{\text{in}} \Delta t_{\text{sub}}$ must not exceed available 3D volume-weighted metal capacity $m_{\text{cap}} = \sum_{m \in \text{cell}} \max(0, \phi_{\text{pack}} - X_{\text{fe,bulk}}[m]) w_{3\text{D},m}$. All inward fluxes are scaled by $\alpha_{\text{in}} = \min(1.0, m_{\text{cap}} / In_{\text{total}})$.
-3. **Capacity-Weighted Marker Update**: When net cell mass changes are distributed back to markers, markers in cells gaining metal receive increments proportional to their remaining room below $\phi_{\text{pack}}$. Markers in cells losing metal scale proportionally. This guarantees that individual markers never violate $[0, \phi_{\text{pack}}]$, even with non-uniform initial distributions.
+3. **Capacity-Weighted Marker Update**: When net cell mass changes are distributed back to markers, markers in cells gaining metal receive increments proportional to their remaining room below $\phi_{\text{pack}}$. Markers in cells losing metal scale proportionally to their molten metal fraction $X_{\text{fem}}$, keeping solid metal fixed. This guarantees that individual markers never violate $[0, \phi_{\text{pack}}]$, even with non-uniform initial distributions.
 
 ### Machine-Precision Conservation
 
@@ -86,7 +89,7 @@ The planetesimal differentiates in four sequential stages driven by $^{26}\text{
 1. **Primordial Homogeneous Accretion ($t = 0\text{ Ma}$)**: The body starts completely cold ($T = 150\text{ K}$) and uniformly icy throughout its entire volume.
 2. **Pore Ice Melting and Rock Desiccation ($t \approx 0.3 - 0.8\text{ Ma}$)**: Radioactive decay warms the interior above 273.15 K. Pore ice melts in the interior and dehydrates the rock, while surface conductive cooling maintains a cold outer lid ($T < 273.15\text{ K}$) where primordial ice is preserved dynamically.
 3. **Porous Fe-FeS Percolation ($t \approx 1.0 - 1.4\text{ Ma}$)**: Interior temperatures reach the Fe-FeS eutectic ($T_{\text{eutectic}} = 1213\text{ K}$). Molten metallic alloy exceeds the percolation threshold ($\phi_{\text{crit,perc}} = 0.05$) and drains inward through crystalline silicate pores.
-4. **Magma Ocean Stokes Settling and Core Ponding ($t \approx 1.5 - 3.5\text{ Ma}$)**: Silicate melting crosses the solidus ($1400\text{ K}$) and reaches the rheological breakdown threshold ($F_m \ge 0.40$). Dense liquid metal droplets settle rapidly through the low-viscosity magma suspension. Droplets pond at the planetary center to form a segregated metallic core of radius $\approx 27\text{ km}$ at maximum packing ($\phi_{\text{pack}} = 0.65$), capped by an iron-depleted silicate mantle ($\phi_{\text{fe}} = 0.02$) and an outer primordial icy crust.
+4. **Magma Ocean Stokes Settling and Core Ponding ($t \approx 1.5 - 3.5\text{ Ma}$)**: Silicate melting crosses the solidus ($1400\text{ K}$) and reaches the settling onset ($F_{\text{settle\_start}} = 0.40$). Dense liquid metal droplets settle rapidly through the low-viscosity magma suspension. Droplets pond at the planetary center to form a segregated metallic core of radius $\approx 27\text{ km}$ at maximum packing ($\phi_{\text{pack}} = 0.65$), capped by an iron-depleted silicate mantle ($\phi_{\text{fe}} = 0.02$) and an outer primordial icy crust.
 
 ### Benchmark Results
 
@@ -130,7 +133,7 @@ To validate self-gravitational acceleration in differentiated planetesimals, `Er
 | Attribute | Specification |
 |:---|:---|
 | **Target Physics / Diagnostic** | Porous Fe-FeS percolation, Stokes droplet settling, mush transition handover, dissipation heating, and self-gravity in differentiated bodies |
-| **Reference Standard** | Rubie et al. (2015); Monteux et al. (2009); Lichtenberg et al. (2019) |
+| **Reference Standard** | [Rubie et al. (2015)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation); [Monteux et al. (2009)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation); [Lichtenberg et al. (2019)](../bibliography.md#Primary-References) |
 | **Figure Provenance** | Class B (1D Finite-Difference Benchmark Solver / Julia Library Exporter) |
 | **Generating Script** | `benchmarks/generate_core_formation_benchmarks.jl`, `benchmarks/render_core_formation_movie.py`, `benchmarks/export_gravity_two_layer_benchmark.jl` |
 | **Automated Verification Test** | `test/test_core_formation.jl`, `test/test_reference_runs.jl` |
@@ -140,22 +143,8 @@ To validate self-gravitational acceleration in differentiated planetesimals, `Er
 
 ## 6. Literature Anchors
 
-- **Yoshino, T., Walter, M. J., & Katsura, T. (2003)**. Core formation in planetesimals triggered by permeable flow. *Nature*, 422(6928), 154-157.  
-  [https://doi.org/10.1038/nature01524](https://doi.org/10.1038/nature01524)
-- **Rubie, D. C., Melosh, H. J., Reid, J. E., Liebske, C., & Righter, K. (2003)**. Mechanisms of metal-silicate equilibration in the terrestrial magma ocean. *Earth and Planetary Science Letters*, 205(3-4), 239-255.  
-  [https://doi.org/10.1016/S0012-821X(02)01044-0](https://doi.org/10.1016/S0012-821X(02)01044-0)
-- **Monteux, J., Ricard, Y., Coltice, N., Dubuffet, F., & Aguilar, M. (2009a)**. A model of metal-silicate separation on growing planets. *Geophysical Journal International*, 179(1), 515-526.  
-  [https://doi.org/10.1111/j.1365-246X.2009.04321.x](https://doi.org/10.1111/j.1365-246X.2009.04321.x)
-- **Monteux, J., Jellinek, A. M., & Buffett, B. A. (2009b)**. Heating of the early Earth by core formation: Physical mechanisms and thermal impact. *Journal of Geophysical Research*, 114(B6), B06404.  
-  [https://doi.org/10.1029/2008JB006166](https://doi.org/10.1029/2008JB006166)
-- **Deguen, R., Olson, P., & Cardin, P. (2011)**. Experiments on turbulent metal-silicate mixing in a magma ocean. *Earth and Planetary Science Letters*, 310(3-4), 303-313.  
-  [https://doi.org/10.1016/j.epsl.2011.08.019](https://doi.org/10.1016/j.epsl.2011.08.019)
-- **Deguen, R., Landeau, M., & Olson, P. (2014)**. Turbulent metal-silicate mixing, fragmentation, and equilibration in magma oceans. *Earth and Planetary Science Letters*, 391, 274-287.  
-  [https://doi.org/10.1016/j.epsl.2014.01.034](https://doi.org/10.1016/j.epsl.2014.01.034)
-- **Rubie, D. C., Nimmo, F., & Melosh, H. J. (2015)**. Formation of Earth's Core. In *Treatise on Geophysics* (2nd ed., Vol. 9, pp. 43-79). Elsevier.  
-  [https://doi.org/10.1016/B978-0-444-53802-4.00152-4](https://doi.org/10.1016/B978-0-444-53802-4.00152-4)
-- **Lichtenberg, T., Golabek, G. J., Burn, R., Meyer, M. R., Alibert, Y., Gerya, T. V., & Mordasini, C. (2019)**. A water budget dichotomy of rocky protoplanets from 26Al-heating. *Nature Astronomy*, 3(4), 307-313.  
-  [https://doi.org/10.1038/s41550-018-0688-5](https://doi.org/10.1038/s41550-018-0688-5)
-- **Richardson, J. F., & Zaki, W. N. (1954)**. Sedimentation and fluidisation: Part I. *Transactions of the Institution of Chemical Engineers*, 32, 35-53.
-- **Taylor, G. I. (1934)**. The formation of emulsions in definable fields of flow. *Proceedings of the Royal Society of London. Series A*, 146(858), 501-523.  
-  [https://doi.org/10.1098/rspa.1934.0169](https://doi.org/10.1098/rspa.1934.0169)
+Full citation details and DOI links for the core-formation and suspension-rheology studies referenced on this page are listed in the [Bibliography and Citations](../bibliography.md):
+
+- Permeable percolation and magma-ocean core formation physics: [Yoshino et al. (2003)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation), [Rubie et al. (2003)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation), [Rubie et al. (2015)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation), and [Lichtenberg et al. (2019)](../bibliography.md#Primary-References).
+- Gravitational heating and turbulent droplet emulsification: [Monteux et al. (2009)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation), [Deguen et al. (2011)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation), [Deguen et al. (2014)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation), and [Taylor (1934)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation).
+- Suspension viscosity, hindered settling, and Fe-S alloy equations of state: [Roscoe (1952)](../bibliography.md#Silicate-Melting-and-Magma-Rheology), [Richardson and Zaki (1954)](../bibliography.md#Silicate-Melting-and-Magma-Rheology), [Solomatov (2015)](../bibliography.md#Silicate-Melting-and-Magma-Rheology), [Sanloup et al. (2000)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation), and [Morard et al. (2014)](../bibliography.md#Core-Formation-and-Metal-Silicate-Segregation).

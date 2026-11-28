@@ -258,6 +258,49 @@ function compute_metal_melt_fraction(T::Real; T_eutectic::Real=1213.0, dT_metal:
     end
 end
 
+@inline function _cubic_hermite_weight(x::Real, x0::Real, x1::Real)::Float64
+    xf, x0f, x1f = Float64(x), Float64(x0), Float64(x1)
+    xf <= x0f && return 0.0
+    xf >= x1f && return 1.0
+    xi = (xf - x0f) / (x1f - x0f)
+    return xi * xi * (3.0 - 2.0 * xi)
+end
+
+@inline function _percolation_interstitial_velocity(
+    phi_m::Float64,
+    F_m::Float64,
+    drho::Float64,
+    g_acc::Float64,
+    phi_trap::Float64;
+    percolation_active::Bool,
+    F_perc_end::Float64,
+    phi_crit_perc::Float64,
+    k_metal_ref::Float64,
+    eta_metal::Float64,
+    perm_exponent::Float64,
+    phi0::Float64,
+)::Float64
+    if !(
+        percolation_active &&
+        F_m < F_perc_end &&
+        phi_m > phi_crit_perc &&
+        phi_m > phi_trap &&
+        drho > 0.0 &&
+        g_acc > 0.0
+    )
+        return 0.0
+    end
+    phi_perm = min(phi_m, 1.0 - 1.0e-7)
+    km = metal_permeability(
+        phi_perm;
+        k_metal_ref=k_metal_ref,
+        phi_crit_perc=phi_crit_perc,
+        perm_exponent=perm_exponent,
+        phi0=phi0,
+    )
+    return (km / (phi_perm * eta_metal)) * drho * g_acc
+end
+
 """
 Compute unified segregation velocity magnitude across percolation and settling regimes.
 
@@ -317,8 +360,8 @@ function metal_segregation_velocity(
     if !(0.0 <= phi_m <= 1.0) || !isfinite(phi_m)
         throw(DomainError(phi_m, "Metal volume fraction must be in [0, 1] and finite"))
     end
-    if !isfinite(F_m)
-        throw(DomainError(F_m, "Silicate melt fraction must be finite"))
+    if !(0.0 <= F_m <= 1.0) || !isfinite(F_m)
+        throw(DomainError(F_m, "Silicate melt fraction must be in [0, 1] and finite"))
     end
     if !isfinite(drho) || drho < 0.0
         throw(DomainError(drho, "Density contrast must be non-negative and finite"))
@@ -344,38 +387,39 @@ function metal_segregation_velocity(
         return 0.0
     end
 
+    phi_f = Float64(phi_m)
+    F_f = Float64(F_m)
+    drho_f = Float64(drho)
+    g_f = Float64(g_acc)
+
     # Percolation component
-    v_perc =
-        if percolation_active &&
-            F_m < F_perc_end &&
-            phi_m > phi_crit_perc &&
-            phi_m > phi_residual
-            phi_m_perm = min(phi_m, 1.0 - 1e-7)
-            km = metal_permeability(
-                phi_m_perm;
-                k_metal_ref=k_metal_ref,
-                phi_crit_perc=phi_crit_perc,
-                perm_exponent=perm_exponent,
-                phi0=phi0,
-            )
-            phi_mobile = phi_m - phi_residual
-            (km / (phi_m * eta_metal)) * drho * g_acc * (phi_mobile / phi_m)
-        else
-            0.0
-        end
+    v_perc = _percolation_interstitial_velocity(
+        phi_f,
+        F_f,
+        drho_f,
+        g_f,
+        Float64(phi_residual);
+        percolation_active=percolation_active,
+        F_perc_end=Float64(F_perc_end),
+        phi_crit_perc=Float64(phi_crit_perc),
+        k_metal_ref=Float64(k_metal_ref),
+        eta_metal=Float64(eta_metal),
+        perm_exponent=Float64(perm_exponent),
+        phi0=Float64(phi0),
+    )
 
     # Settling component
-    v_settle = if settling_active && F_m >= F_settle_start && phi_m > 0.0
+    v_settle = if settling_active && F_f >= F_settle_start && phi_f > 0.0
         v0 = stokes_settling_velocity(
             r_drop,
-            drho,
-            g_acc,
+            drho_f,
+            g_f,
             eta_susp;
             hadamard_rybczynski=hadamard_rybczynski,
             eta_metal=eta_metal,
         )
         h = richardson_zaki_hindrance(
-            phi_m; hindered_exponent=hindered_exponent, phi_pack=phi_pack
+            phi_f; hindered_exponent=hindered_exponent, phi_pack=phi_pack
         )
         v0 * h
     else
@@ -387,15 +431,8 @@ function metal_segregation_velocity(
     elseif !percolation_active && settling_active
         return v_settle
     else
-        if F_m <= F_settle_start
-            return v_perc
-        elseif F_m >= F_perc_end
-            return v_settle
-        else
-            xi = (F_m - F_settle_start) / (F_perc_end - F_settle_start)
-            w = xi * xi * (3.0 - 2.0 * xi)
-            return (1.0 - w) * v_perc + w * v_settle
-        end
+        w = _cubic_hermite_weight(F_f, F_settle_start, F_perc_end)
+        return (1.0 - w) * v_perc + w * v_settle
     end
 end
 
@@ -627,4 +664,192 @@ function compute_liquid_metal_density(
     # Floor of 0.5 prevents unphysical negative/zero density during extreme numerical transients.
     thermal_factor = max(0.5, 1.0 - alpha_m * (T_val - T0) + P_val / K_T)
     return rho0 * thermal_factor
+end
+
+"""
+Compute silicate suspension viscosity with smooth melt weakening and crystal-mush cutoff.
+
+$(SIGNATURES)
+
+References:
+- Roscoe (1952), Br. J. Appl. Phys., 3(8), 267-269.
+- Solomatov (2015), Treatise on Geophysics, Ch. 9.04, Eq. 17.
+
+# Arguments
+- `eta_solid`: Reference silicate matrix viscosity at `F_m = 0` [Pa s]
+- `F_m`: Silicate melt fraction in `[0, 1]` [-]
+
+# Keyword Arguments
+- `alpha_eta`: Arrhenius melt-weakening exponent below `phi_crit` [-] (default `28.0`)
+- `phi_crit`: Rheological critical melt fraction [-] (default `0.4`)
+- `eta_melt`: Pure silicate melt viscosity at `F_m = 1` [Pa s] (default `10.0`)
+- `etamin`: Lower viscosity clamp [Pa s] (default `0.01`)
+- `etamax`: Upper viscosity clamp [Pa s] (default `1.0e23`)
+- `F_blend_width`: Melt-fraction width for Hermite blend into Roscoe branch [-] (default `0.10`)
+
+# Returns
+- Effective silicate suspension viscosity [Pa s] clamped to `[etamin, etamax]`.
+
+# Raises
+- `DomainError`: If any argument is non-finite or outside its physical domain.
+"""
+function compute_silicate_suspension_viscosity(
+    eta_solid::Real,
+    F_m::Real;
+    alpha_eta::Real=28.0,
+    phi_crit::Real=0.4,
+    eta_melt::Real=10.0,
+    etamin::Real=0.01,
+    etamax::Real=1.0e23,
+    F_blend_width::Real=0.10,
+)::Float64
+    eta_s = Float64(eta_solid)
+    Fm = Float64(F_m)
+    alpha_e = Float64(alpha_eta)
+    phi_c = Float64(phi_crit)
+    eta_m = Float64(eta_melt)
+    etamin_f = Float64(etamin)
+    etamax_f = Float64(etamax)
+    F_bw = Float64(F_blend_width)
+
+    if !isfinite(eta_s) || eta_s <= 0.0
+        throw(DomainError(eta_s, "Solid viscosity must be positive and finite"))
+    end
+    if !isfinite(Fm) || !(0.0 <= Fm <= 1.0)
+        throw(DomainError(Fm, "Silicate melt fraction must be in [0, 1] and finite"))
+    end
+    if !isfinite(alpha_e) || alpha_e < 0.0
+        throw(
+            DomainError(alpha_e, "Melt-weakening exponent must be non-negative and finite")
+        )
+    end
+    if !isfinite(phi_c) || !(0.0 < phi_c < 1.0)
+        throw(DomainError(phi_c, "Critical melt fraction must be in (0, 1) and finite"))
+    end
+    if !isfinite(eta_m) || eta_m <= 0.0
+        throw(DomainError(eta_m, "Melt viscosity must be positive and finite"))
+    end
+    if !isfinite(etamin_f) || etamin_f <= 0.0
+        throw(DomainError(etamin_f, "Minimum viscosity must be positive and finite"))
+    end
+    if !isfinite(etamax_f) || etamax_f < etamin_f
+        throw(DomainError(etamax_f, "Maximum viscosity must be >= etamin and finite"))
+    end
+    if !isfinite(F_bw) || F_bw <= 0.0
+        throw(DomainError(F_bw, "Blend width must be positive and finite"))
+    end
+
+    eta_raw = if Fm <= phi_c
+        exp(log(eta_s) - alpha_e * Fm)
+    else
+        pack_denom = max(1.0 - (1.0 - Fm) / (1.0 - phi_c), 1.0e-12)
+        log_roscoe = log(eta_m) - 2.5 * log(pack_denom)
+        log_crit = log(eta_s) - alpha_e * phi_c
+        log_target = min(log_roscoe, log_crit)
+        F_end = min(phi_c + F_bw, max(0.95, 0.5 * (phi_c + 1.0)))
+        if Fm < F_end && F_end > phi_c
+            theta = (Fm - phi_c) / (F_end - phi_c)
+            w = theta * theta * (3.0 - 2.0 * theta)
+            exp((1.0 - w) * log_crit + w * log_target)
+        else
+            exp(log_target)
+        end
+    end
+    return clamp(eta_raw, etamin_f, etamax_f)
+end
+
+"""
+Compute the effective trapped metal volume fraction across the percolation-to-settling transition.
+
+$(SIGNATURES)
+
+# Arguments
+- `F_m`: Silicate melt fraction in `[0, 1]` [-]
+- `phi_residual`: Residual percolation metal fraction in `[0, 1]` [-]
+
+# Keyword Arguments
+- `percolation_active`: Enable solid-matrix percolation trapping (default `true`)
+- `settling_active`: Enable magma-ocean droplet settling release (default `true`)
+- `F_settle_start`: Melt fraction where settling transition starts [-] (default `0.40`)
+- `F_perc_end`: Melt fraction where percolation trapping vanishes [-] (default `0.50`)
+
+# Returns
+- Effective irreducible trapped metal volume fraction [-].
+
+# Raises
+- `DomainError`: If fractions or transition bounds are non-finite or out of order.
+"""
+function effective_metal_trap_fraction(
+    F_m::Real,
+    phi_residual::Real;
+    percolation_active::Bool=true,
+    settling_active::Bool=true,
+    F_settle_start::Real=0.40,
+    F_perc_end::Real=0.50,
+)::Float64
+    Fm = Float64(F_m)
+    phi_r = Float64(phi_residual)
+    F0 = Float64(F_settle_start)
+    F1 = Float64(F_perc_end)
+
+    if !isfinite(Fm) || !(0.0 <= Fm <= 1.0)
+        throw(DomainError(Fm, "Silicate melt fraction must be in [0, 1] and finite"))
+    end
+    if !isfinite(phi_r) || !(0.0 <= phi_r <= 1.0)
+        throw(DomainError(phi_r, "Residual metal fraction must be in [0, 1] and finite"))
+    end
+    if !isfinite(F0) || !isfinite(F1) || !(0.0 <= F0 <= F1 <= 1.0)
+        throw(
+            DomainError(
+                (F0, F1),
+                "Transition bounds must satisfy 0 <= F_settle_start <= F_perc_end <= 1",
+            ),
+        )
+    end
+
+    !percolation_active && return 0.0
+    !settling_active && return phi_r
+    w = _cubic_hermite_weight(Fm, F0, F1)
+    return (1.0 - w) * phi_r
+end
+
+"""
+Compute equivalent spherical metallic core radius for a packed core mass.
+
+Converts a compact metallic mass `M_core_metal` at density `rho_metal` and packing
+fraction `phi_pack` into an equivalent sphere radius. Run diagnostics
+`state.accumulators.rcore` instead compute the volume-equivalent sphere radius from
+summed 3D core marker volumes `V_core_total` where `Xfe_bulk >= phi_core_threshold`.
+
+$(SIGNATURES)
+
+# Arguments
+- `M_core_metal`: Segregated core metal mass [kg]
+- `rho_metal`: Metallic core density [kg/m^3]
+- `phi_pack`: Core metal packing volume fraction in `(0, 1]` [-] (default `0.65`)
+
+# Returns
+- Equivalent spherical metallic core radius [m].
+
+# Raises
+- `DomainError`: If mass is negative, density is non-positive, or packing is outside `(0, 1]`.
+"""
+function compute_core_radius(
+    M_core_metal::Real, rho_metal::Real, phi_pack::Real=0.65
+)::Float64
+    M_val = Float64(M_core_metal)
+    rho_val = Float64(rho_metal)
+    phi_val = Float64(phi_pack)
+
+    if !isfinite(M_val) || M_val < 0.0
+        throw(DomainError(M_val, "Core metal mass must be non-negative and finite"))
+    end
+    if !isfinite(rho_val) || rho_val <= 0.0
+        throw(DomainError(rho_val, "Core metal density must be positive and finite"))
+    end
+    if !isfinite(phi_val) || !(0.0 < phi_val <= 1.0)
+        throw(DomainError(phi_val, "Core packing fraction must be in (0, 1] and finite"))
+    end
+
+    return iszero(M_val) ? 0.0 : cbrt(3.0 * M_val / (4.0 * π * rho_val * phi_val))
 end

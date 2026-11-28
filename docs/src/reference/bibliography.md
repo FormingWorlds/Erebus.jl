@@ -64,32 +64,43 @@ The mathematical foundations, constitutive formulations, and numerical technique
 ## Core Formation and Metal-Silicate Segregation
 
 - **Yoshino, T., Walter, M. J., & Katsura, T. (2003)**. Core formation in planetesimals triggered by permeable flow. *Nature*, 422(6928), 154-157.  
-  [https://doi.org/10.1038/nature01524](https://doi.org/10.1038/nature01524)  
+  [https://doi.org/10.1038/nature01459](https://doi.org/10.1038/nature01459)  
   *Experimental determination of liquid Fe-FeS percolation connectivity and permeability thresholds in crystalline silicates.*
 
 - **Rubie, D. C., Melosh, H. J., Reid, J. E., Liebske, C., & Righter, K. (2003)**. Mechanisms of metal-silicate equilibration in the terrestrial magma ocean. *Earth and Planetary Science Letters*, 205(3-4), 239-255.  
   [https://doi.org/10.1016/S0012-821X(02)01044-0](https://doi.org/10.1016/S0012-821X(02)01044-0)  
   *Capillary droplet emulsification, Weber number stability limits, and Stokes settling dynamics in magma oceans.*
 
-- **Monteux, J., Ricard, Y., Coltice, N., Dubuffet, F., & Aguilar, M. (2009a)**. A model of metal-silicate separation on growing planets. *Geophysical Journal International*, 179(1), 515-526.  
-  [https://doi.org/10.1111/j.1365-246X.2009.04321.x](https://doi.org/10.1111/j.1365-246X.2009.04321.x)  
-  *Two-phase continuum formulation for metal-silicate differentiation and planetary core formation.*
+- **Monteux, J., Ricard, Y., Coltice, N., Dubuffet, F., & Ulvrova, M. (2009)**. A model of metal-silicate separation on growing planets. *Earth and Planetary Science Letters*, 287(3-4), 353-362.  
+  [https://doi.org/10.1016/j.epsl.2009.08.020](https://doi.org/10.1016/j.epsl.2009.08.020)  
+  *Two-phase continuum formulation and gravitational dissipation heating for metal-silicate separation and planetary core formation.*
 
-- **Monteux, J., Jellinek, A. M., & Buffett, B. A. (2009b)**. Heating of the early Earth by core formation: Physical mechanisms and thermal impact. *Journal of Geophysical Research*, 114(B6), B06404.  
-  [https://doi.org/10.1029/2008JB006166](https://doi.org/10.1029/2008JB006166)  
-  *Gravitational dissipation heating mechanics and thermal feedback during planetary core segregation.*
-
-- **Rubie, D. C., Nimmo, F., & Melosh, H. J. (2015)**. Formation of Earth's Core. In *Treatise on Geophysics* (2nd ed., Vol. 9, pp. 43-79). Elsevier.  
-  [https://doi.org/10.1016/B978-0-444-53802-4.00152-4](https://doi.org/10.1016/B978-0-444-53802-4.00152-4)  
+- **Rubie, D. C., Nimmo, F., & Melosh, H. J. (2015)**. Formation of the Earth's Core. In *Treatise on Geophysics* (2nd ed., Vol. 9, pp. 43-79). Elsevier.  
+  [https://doi.org/10.1016/B978-0-444-53802-4.00154-8](https://doi.org/10.1016/B978-0-444-53802-4.00154-8)  
   *Comprehensive review of percolation, diapirism, and turbulent droplet emulsification during planetary core segregation.*
 
 - **Deguen, R., Olson, P., & Cardin, P. (2011)**. Experiments on turbulent metal-silicate mixing in a magma ocean. *Earth and Planetary Science Letters*, 310(3-4), 303-313.  
-  [https://doi.org/10.1016/j.epsl.2011.08.019](https://doi.org/10.1016/j.epsl.2011.08.019)  
+  [https://doi.org/10.1016/j.epsl.2011.08.041](https://doi.org/10.1016/j.epsl.2011.08.041)  
   *Experimental constraints on droplet emulsification, fluid entrainment, and turbulent mixing regimes during core formation.*
 
 - **Deguen, R., Landeau, M., & Olson, P. (2014)**. Turbulent metal-silicate mixing, fragmentation, and equilibration in magma oceans. *Earth and Planetary Science Letters*, 391, 274-287.  
-  [https://doi.org/10.1016/j.epsl.2014.01.034](https://doi.org/10.1016/j.epsl.2014.01.034)  
+  [https://doi.org/10.1016/j.epsl.2014.02.007](https://doi.org/10.1016/j.epsl.2014.02.007)  
   *Fluid dynamical model for metal diapir and droplet fragmentation in convective planetary magma oceans.*
+
+- **Sanloup, C., Guyot, F., Gillet, P., Fiquet, G., Mezouar, M., & Martinez, I. (2000)**. Density measurements of liquid Fe-S alloys at high-pressure. *Geophysical Research Letters*, 27(6), 811-814.  
+  [https://doi.org/10.1029/1999GL008431](https://doi.org/10.1029/1999GL008431)  
+  *Experimental liquid Fe-S density calibration used in the `:sanloup2000` alloy equation of state.*
+
+- **Morard, G., Andrault, D., Antonangeli, D., & Bouchet, J. (2014)**. Properties of iron alloys under the Earth's core conditions. *Comptes Rendus Geoscience*, 346(5-6), 130-139.  
+  [https://doi.org/10.1016/j.crte.2014.04.007](https://doi.org/10.1016/j.crte.2014.04.007)  
+  *Relative density deficit parameterization for liquid Fe-S alloys in the `:morard2014` mode.*
+
+- **Stevenson, D. J. (1990)**. Fluid dynamics of core formation. In *Origin of the Earth* (pp. 231-249). Oxford University Press.  
+  *Fluid dynamical regime transitions, metal rainout, and core separation timescales.*
+
+- **Taylor, G. I. (1934)**. The formation of emulsions in definable fields of flow. *Proceedings of the Royal Society of London. Series A*, 146(858), 501-523.  
+  [https://doi.org/10.1098/rspa.1934.0169](https://doi.org/10.1098/rspa.1934.0169)  
+  *Capillary breakup criterion and droplet deformation theory in shear flows.*
 
 ---
 
@@ -106,6 +117,10 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Richardson, J. F., & Zaki, W. N. (1954)**. Sedimentation and fluidisation: Part I. *Transactions of the Institution of Chemical Engineers*, 32, 35-53 (reprinted in *Chemical Engineering Research and Design*, 75, S82-S100, 1997).  
   [https://doi.org/10.1016/S0263-8762(97)80006-8](https://doi.org/10.1016/S0263-8762(97)80006-8)  
   *Empirical power-law hindered-settling velocity relation for concentrated crystal suspensions.*
+
+- **Roscoe, R. (1952)**. The viscosity of suspensions of rigid spheres. *British Journal of Applied Physics*, 3(8), 267-269.  
+  [https://doi.org/10.1088/0508-3443/3/8/306](https://doi.org/10.1088/0508-3443/3/8/306)  
+  *Effective viscosity relation for concentrated suspensions used above the rheological critical melt fraction.*
 
 - **Siggia, E. D. (1994)**. High Rayleigh number convection. *Annual Review of Fluid Mechanics*, 26, 137-168.  
   [https://doi.org/10.1146/annurev.fl.26.010194.001033](https://doi.org/10.1146/annurev.fl.26.010194.001033)  
@@ -151,23 +166,23 @@ The mathematical foundations, constitutive formulations, and numerical technique
 
 ## Metal-Silicate Volatile Partitioning and Geochemistry
 
-- **Grewal, D. S., Dasgupta, R., Sun, C., Tsuno, K., & Costin, G. (2019a)**. Delivery of carbon, nitrogen, and sulfur to the silicate Earth by a planetary merger. *Science Advances*, 5(1), eaau3669.  
+- **Grewal, D. S., Dasgupta, R., Sun, C., Tsuno, K., & Costin, G. (2019a)**. Delivery of carbon, nitrogen, and sulfur to the silicate Earth by a giant impact. *Science Advances*, 5(1), eaau3669.  
   [https://doi.org/10.1126/sciadv.aau3669](https://doi.org/10.1126/sciadv.aau3669)  
   *Experimental parameterization of carbon, nitrogen, and sulfur partitioning between liquid metal and silicate melt as a function of temperature, pressure, oxygen fugacity, and alloy composition.*
 
-- **Grewal, D. S., Dasgupta, R., & Farnell, A. (2019b)**. The speciation of carbon, nitrogen, and water in magma oceans and its effect on volatile partitioning between metal and silicate. *Geochimica et Cosmochimica Acta*, 251, 87-115.  
+- **Grewal, D. S., Dasgupta, R., Holmes, A. K., Costin, G., Li, Y., & Tsuno, K. (2019b)**. The fate of nitrogen during core-mantle separation on Earth. *Geochimica et Cosmochimica Acta*, 251, 87-115.  
   [https://doi.org/10.1016/j.gca.2019.02.009](https://doi.org/10.1016/j.gca.2019.02.009)  
-  *Experimental determination of carbon and nitrogen siderophile partitioning and the suppression of carbon affinity by dissolved sulfur in metallic iron alloys.*
+  *Experimental investigation of nitrogen solubility and metal-silicate partitioning under graphite-saturated conditions during terrestrial core-mantle separation.*
 
-- **Fischer, R. A., Cottrell, E., Hauri, E., Lee, K. K. M., & Le Voyer, M. (2020)**. The partitioning of carbon and oxygen between core and mantle in the early Earth. *Proceedings of the National Academy of Sciences*, 117(16), 8743-8749.  
+- **Fischer, R. A., Cottrell, E., Hauri, E., Lee, K. K. M., & Le Voyer, M. (2020)**. The carbon content of Earth and its core. *Proceedings of the National Academy of Sciences*, 117(16), 8743-8749.  
   [https://doi.org/10.1073/pnas.1919930117](https://doi.org/10.1073/pnas.1919930117)  
   *High-pressure and high-temperature laser-heated diamond anvil cell measurements of carbon partitioning between metallic liquid and molten silicate.*
 
-- **Clesi, V., Bouhifd, M. A., Bolfan-Casanova, N., Manthilake, G., Schiavi, F., Kawamoto, T., & Andrault, D. (2018)**. Low hydrogen contents in Earth's core. *Science Advances*, 4(3), e1701876.  
+- **Clesi, V., Bouhifd, M. A., Bolfan-Casanova, N., Manthilake, G., Schiavi, F., Raepsaet, C., Bureau, H., Khodja, H., & Andrault, D. (2018)**. Low hydrogen contents in the cores of terrestrial planets. *Science Advances*, 4(3), e1701876.  
   [https://doi.org/10.1126/sciadv.1701876](https://doi.org/10.1126/sciadv.1701876)  
   *Experimental determination of hydrogen partitioning between liquid iron and silicate melt at low pressures relevant to planetesimals and protoplanetary embryos.*
 
-- **Boujibar, A., Andrault, D., Bolfan-Casanova, N., Bouhifd, M. A., & Kawamoto, T. (2014)**. Metal-silicate partitioning of sulphur, new experimental constraints by EMPA and SIMS. *Earth and Planetary Science Letters*, 391, 42-54.  
+- **Boujibar, A., Andrault, D., Bouhifd, M. A., Bolfan-Casanova, N., Devidal, J.-L., & Trcera, N. (2014)**. Metal-silicate partitioning of sulphur, new experimental and thermodynamic constraints on planetary accretion. *Earth and Planetary Science Letters*, 391, 42-54.  
   [https://doi.org/10.1016/j.epsl.2014.01.021](https://doi.org/10.1016/j.epsl.2014.01.021)  
   *Empirical parameterization of sulfur partitioning between metallic liquid and silicate melt as a function of temperature, pressure, and oxygen fugacity.*
 
@@ -175,19 +190,19 @@ The mathematical foundations, constitutive formulations, and numerical technique
 
 ## Normative Accessory Minerals and Meteorite Petrology
 
-- **Benedix, G. K., McCoy, T. J., & Keil, K. (1998)**. A petrologic and geochemical study of silicate inclusions in IAB iron meteorites: Implications for the primitive achondrite parent body. *Geochimica et Cosmochimica Acta*, 62(14), 2535-2553.  
+- **Benedix, G. K., McCoy, T. J., Keil, K., Bogard, D. D., & Garrison, D. H. (1998)**. A petrologic and isotopic study of winonaites: evidence for early partial melting, brecciation, and metamorphism. *Geochimica et Cosmochimica Acta*, 62(14), 2535-2553.  
   [https://doi.org/10.1016/S0016-7037(98)00166-5](https://doi.org/10.1016/S0016-7037(98)00166-5)  
-  *Petrologic and geochemical analysis of silicate inclusions, partial melting, and thermal metamorphism in the IAB parent body.*
+  *Petrologic and isotopic study of winonaites establishing early partial melting, brecciation, and metamorphism on the primitive achondrite parent body.*
 
-- **Benedix, G. K., McCoy, T. J., Keil, K., & Bogard, D. D. (2000)**. A petrologic and geochemical study of winonaites: Implications for trace element behavior during primitive achondrite differentiation. *Geochimica et Cosmochimica Acta*, 64(14), 2535-2553.  
-  [https://doi.org/10.1016/S0016-7037(00)00383-5](https://doi.org/10.1016/S0016-7037(00)00383-5)  
+- **Benedix, G. K., McCoy, T. J., Keil, K., & Love, S. G. (2000)**. A petrologic study of the IAB iron meteorites: Constraints on the formation of the IAB-Winonaite parent body. *Meteoritics & Planetary Science*, 35(6), 1127-1141.  
+  [https://doi.org/10.1111/j.1945-5100.2000.tb01502.x](https://doi.org/10.1111/j.1945-5100.2000.tb01502.x)  
   *Petrologic and geochemical characterization of primitive achondrite parent bodies, incomplete differentiation, and accessory phase retention.*
 
 - **Buchwald, V. F. (1975)**. *Handbook of Iron Meteorites: Their History, Distribution, Composition, and Structure*. University of California Press.  
   *Comprehensive catalog and structural characterization of iron meteorites, accessory mineral rhabdites, and troilite nodules.*
 
-- **Chabot, N. L., & Drake, M. J. (1999)**. Crystallization of magmatic iron meteorites: The role of phosphorus and sulfur. *Meteoritics & Planetary Science*, 34(2), 235-246.  
-  [https://doi.org/10.1111/j.1945-5100.1999.tb01749.x](https://doi.org/10.1111/j.1945-5100.1999.tb01749.x)  
+- **Chabot, N. L., & Drake, M. J. (1999)**. Crystallization of magmatic iron meteorites: The role of mixing in the molten core. *Meteoritics & Planetary Science*, 34(2), 235-246.  
+  [https://doi.org/10.1111/j.1945-5100.1999.tb01748.x](https://doi.org/10.1111/j.1945-5100.1999.tb01748.x)  
   *Thermodynamics and crystallization pathways of magmatic iron meteorites, focused on phosphorus and sulfur fractional crystallization.*
 
 - **Goldstein, J. I., Scott, E. R. D., & Chabot, N. L. (2009)**. Iron meteorites: Crystallization, thermal history, parent bodies, and origin. *Chemie der Erde - Geochemistry*, 69(4), 293-325.  
@@ -233,6 +248,10 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Turcotte, D. L., & Schubert, G. (2014)**. *Geodynamics* (3rd ed.). Cambridge University Press.  
   [https://doi.org/10.1017/CBO9780511843877](https://doi.org/10.1017/CBO9780511843877)  
   *Standard textbook reference for porous flow, thermal convection scaling laws, and planetary thermal evolution.*
+
+- **Travis, B. J., Bland, P. A., Feldman, W. C., & Sykes, M. V. (2018)**. Hydrothermal dynamics in a CM-based model of Ceres. *Meteoritics & Planetary Science*, 53(9), 2008-2032.  
+  [https://doi.org/10.1111/maps.13138](https://doi.org/10.1111/maps.13138)  
+  *Arrhenius serpentinization kinetics for hydrothermal planetesimal evolution.*
 
 ---
 
@@ -309,6 +328,10 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1016/0019-1035(86)90051-5](https://doi.org/10.1016/0019-1035(86)90051-5)  
   *Multi-component hydrodynamic escape and crossover mass formulation for heavy volatile drag by escaping light carrier gases.*
 
+- **Ribas, I., Guinan, E. F., Güdel, M., & Audard, M. (2005)**. Evolution of the Solar Activity over Time and Effects on Planetary Atmospheres. I. High-Energy Irradiances (1-1700 Å). *The Astrophysical Journal*, 622(1), 680-694.  
+  [https://doi.org/10.1086/427977](https://doi.org/10.1086/427977)  
+  *Power-law decay of stellar XUV irradiance after the saturated early phase.*
+
 ---
 
 ## Radionuclides and Early Solar System Geochronology
@@ -339,6 +362,10 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Robie, R. A., & Hemingway, B. S. (1995)**. *Thermodynamic Properties of Minerals and Related Substances at 298.15 K and 1 Bar (10^5 Pascals) Pressure and at Higher Temperatures*. U.S. Geological Survey Bulletin 2131.
   [https://doi.org/10.3133/b2131](https://doi.org/10.3133/b2131)
   *Standard state thermodynamic data for minerals and gas species.*
+
+- **Evans, K. A. (2012)**. The redox budget of subduction zones. *Earth-Science Reviews*, 113(1-2), 11-32.  
+  [https://doi.org/10.1016/j.earscirev.2012.03.003](https://doi.org/10.1016/j.earscirev.2012.03.003)  
+  *Extensive electron-budget accounting framework for oxidation-reduction state tracking.*
 
 ---
 

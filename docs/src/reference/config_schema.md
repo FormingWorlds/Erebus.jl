@@ -247,7 +247,7 @@ Parameters controlling hydrothermal water-rock hydration and dehydration reactio
 | `Sxo_B` | `Float64` | `2.0e-11` | $\text{s}^{-1}$ | Reaction scale pre-factor | $> 0$ |
 | `Tscl_B` | `Float64` | `10.0` | K | Temperature scale factor | $> 0$ |
 | `To_B` | `Float64` | `293.0` | K | Reference temperature | $> 0$ |
-| `Sxo_T` | `Float64` | `2.0e-11` | $\text{s}^{-1}$ | Reaction rate pre-factor for Arrhenius mode 3 (Travis et al. 2018) | $> 0$ |
+| `Sxo_T` | `Float64` | `2.0e-11` | $\text{s}^{-1}$ | Reaction rate pre-factor for Arrhenius mode 3 ([Travis et al., 2018](bibliography.md#Hydrothermal-Convection-and-Fluid-Transport)) | $> 0$ |
 | `To_T` | `Float64` | `293.0` | K | Reference temperature for Arrhenius mode 3 | $> 0$ |
 | `Ea_T` | `Float64` | `63.8e3` | J/mol | Activation energy for Arrhenius mode 3 | $\ge 0$ |
 | `alpha_relaxation` | `Float64` | `0.5` | - | Reaction rate under-relaxation factor | $\in (0, 1]$ |
@@ -296,14 +296,14 @@ Parameters controlling two-phase silicate melt segregation, porous Darcy percola
 |:---|:---|:---|:---|:---|:---|
 | `active` | `Bool` | `false` | - | Enable buoyant silicate melt segregation and magma transport | `true` / `false` |
 | `k_melt_ref` | `Float64` | `1.0e-11` | $\text{m}^2$ | Reference permeability of molten silicate matrix | $> 0$ |
-| `perm_exponent` | `Float64` | `3.0` | - | McKenzie (1984) permeability power-law exponent | $> 0$ |
+| `perm_exponent` | `Float64` | `3.0` | - | [McKenzie (1984)](bibliography.md#Silicate-Melting-and-Magma-Rheology) permeability power-law exponent | $> 0$ |
 | `phi0` | `Float64` | `0.10` | - | Reference porosity/melt fraction scale | $\in (0, 1)$ |
 | `phi_residual` | `Float64` | `0.01` | - | Residual silicate melt threshold trapped in matrix | $\ge 0$ |
 | `phi_crit` | `Float64` | `0.40` | - | Rheological transition threshold between Darcy and Stokes | $\in (0, 1)$ |
 | `phi_pack` | `Float64` | `1.0` | - | Maximum silicate melt packing limit | $\in (0, 1]$ |
 | `eta_melt` | `Float64` | `10.0` | Pa s | Dynamic shear viscosity of liquid silicate melt | $> 0$ |
 | `r_grain` | `Float64` | `1.0e-3` | m | Mean silicate crystal grain radius for Stokes settling | $> 0$ |
-| `hindered_exponent` | `Float64` | `2.0` | - | Richardson-Zaki (1954) hindered settling exponent | $\ge 0$ |
+| `hindered_exponent` | `Float64` | `2.0` | - | [Richardson and Zaki (1954)](bibliography.md#Silicate-Melting-and-Magma-Rheology) hindered settling exponent | $\ge 0$ |
 | `F_perc_end` | `Float64` | `0.35` | - | Upper limit of pure Darcy porous percolation regime | $0 \le \phi_{\text{residual}} < F_{\text{perc\_end}} \le \phi_{\text{crit}}$ |
 | `F_settle_start` | `Float64` | `0.45` | - | Lower limit of pure Stokes crystal settling regime | $\phi_{\text{crit}} \le F_{\text{settle\_start}} \le \phi_{\text{pack}}$ |
 | `cfl_melt` | `Float64` | `0.5` | - | Courant-Friedrichs-Lewy safety factor for segregation subcycling | $\in (0, 1]$ |
@@ -312,7 +312,7 @@ Parameters controlling two-phase silicate melt segregation, porous Darcy percola
 | `latent_crystallization` | `Bool` | `true` | - | Enable latent heat release upon subsolidus melt crystallization | `true` / `false` |
 | `exsolution_active` | `Bool` | `true` | - | Enable decompression volatile exsolution coupling | `true` / `false` |
 | `track_depletion` | `Bool` | `true` | - | Enable Lagrangian marker melt extraction and mantle depletion tracking | `true` / `false` |
-| `compaction_active` | `Bool` | `false` | - | Enable McKenzie (1984) matrix compaction and dynamic compaction pressure | `true` / `false` |
+| `compaction_active` | `Bool` | `false` | - | Enable [McKenzie (1984)](bibliography.md#Silicate-Melting-and-Magma-Rheology) matrix compaction and dynamic compaction pressure | `true` / `false` |
 | `bulk_viscosity_ratio` | `Float64` | `1.0` | - | Ratio of matrix bulk compaction viscosity to shear viscosity | $> 0$ |
 | `min_bulk_porosity` | `Float64` | `0.005` | - | Regularization porosity floor preventing singular bulk viscosity | $\in (0, \phi_{\text{crit}})$ |
 | `compaction_length_min` | `Float64` | `100.0` | m | Minimum allowable compaction length scale | $> 0$ |
@@ -400,7 +400,7 @@ Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape,
 | `epsilon_xuv` | `Float64` | `0.15` | - | Photoevaporation energy-limited escape efficiency | $> 0$ |
 | `F_xuv_1au_sat` | `Float64` | `1.361` | $\mathrm{W}/\mathrm{m}^2$ | Saturated stellar XUV flux at 1 AU | $\ge 0$ |
 | `t_sat_yr` | `Float64` | `1.0e+8` | yr | Saturated phase duration | $> 0$ |
-| `beta_xuv` | `Float64` | `1.23` | - | XUV flux power-law decay exponent (Ribas et al. 2005) | $\ge 0$ |
+| `beta_xuv` | `Float64` | `1.23` | - | XUV flux power-law decay exponent ([Ribas et al., 2005](bibliography.md#Coupled-Atmospheres,-Gas-Envelopes,-and-Radiative-Equilibrium)) | $\ge 0$ |
 | `r_xuv_ratio` | `Float64` | `1.0` | - | Effective XUV absorption radius ratio $R_{\mathrm{XUV}} / R_{\mathrm{planet}}$ | $\ge 1.0$ |
 | `tidal_correction` | `Bool` | `true` | - | Enable Roche lobe / tidal gravitational barrier reduction | `true` / `false` |
 
@@ -408,7 +408,7 @@ Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape,
 
 ## `[atmosphere]`
 
-Parameters controlling 1D coupled proto-atmospheres, protoplanetary disk gas envelope capture and boil-off, Guillot (2010) semi-grey radiative equilibrium, and Zahnle-Kasting hydrodynamic crossover escape.
+Parameters controlling 1D coupled proto-atmospheres, protoplanetary disk gas envelope capture and boil-off, [Guillot (2010)](bibliography.md#Coupled-Atmospheres,-Gas-Envelopes,-and-Radiative-Equilibrium) semi-grey radiative equilibrium, and [Zahnle and Kasting (1986)](bibliography.md#Coupled-Atmospheres,-Gas-Envelopes,-and-Radiative-Equilibrium) hydrodynamic crossover escape.
 
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
@@ -419,9 +419,9 @@ Parameters controlling 1D coupled proto-atmospheres, protoplanetary disk gas env
 | `albedo` | `Float64` | `0.20` | - | Planetary Bond albedo | $\in [0, 1)$ |
 | `gamma_guillot` | `Float64` | `0.10` | - | Ratio of shortwave to longwave opacity $\kappa_{\mathrm{vis}} / \kappa_{\mathrm{ir}}$ | $> 0$ |
 | `T_skin_floor` | `Float64` | `50.0` | K | Minimum allowable skin temperature floor | $> 0$ |
-| `f_rec` | `Float64` | `0.10` | - | Ormel et al. (2015) envelope steady-state recycling fraction | $\in (0, 1]$ |
+| `f_rec` | `Float64` | `0.10` | - | [Ormel et al. (2015)](bibliography.md#Coupled-Atmospheres,-Gas-Envelopes,-and-Radiative-Equilibrium) envelope steady-state recycling fraction | $\in (0, 1]$ |
 | `tau_boil` | `Float64` | `3.15576e+11` | s | Hydrodynamic envelope boil-off relaxation timescale (10 kyr) | $> 0$ |
-| `crossover_active` | `Bool` | `true` | - | Enable Zahnle & Kasting (1986) hydrodynamic crossover drag | `true` / `false` |
+| `crossover_active` | `Bool` | `true` | - | Enable [Zahnle and Kasting (1986)](bibliography.md#Coupled-Atmospheres,-Gas-Envelopes,-and-Radiative-Equilibrium) hydrodynamic crossover drag | `true` / `false` |
 
 ---
 
@@ -462,12 +462,12 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 | `rhocp_metal` | `Float64` | `4.0e6` | $\text{J/(m}^3\text{ K)}$ | Volumetric heat capacity of metallic phase | $> 0$ |
 | `Xfe_bulk` | `Float64` | `0.20` | - | Initial bulk metal volume fraction in planet interior; also sets the radionuclide concentrations per phase | $\in [0, \phi_{\text{pack}}]$ |
 | `phi_pack` | `Float64` | `0.65` | - | Maximum packing fraction of segregated core metal | $\in (0, 1]$ |
-| `T_eutectic` | `Float64` | `1213.0` | K | Fe-FeS binary eutectic melting temperature | $> 0$ |
+| `T_eutectic` | `Float64` | `1213.0` | K | Metallic Fe-Ni-S initial melting temperature (eutectic lowered by Ni, P, C) | $> 0$ |
 | `dT_metal` | `Float64` | `50.0` | K | Temperature range for complete metal melting | $> 0$ |
 | `k_metal_ref` | `Float64` | `1.0e-9` | $\text{m}^2$ | Reference permeability for liquid metal percolation | $> 0$ |
 | `perm_exponent` | `Float64` | `3.0` | - | Power-law exponent for metal permeability function | $> 0$ |
 | `phi_crit_perc` | `Float64` | `0.05` | - | Critical porosity threshold for percolation connectivity | $\in [0, \phi_{\text{pack}})$ |
-| `phi_residual` | `Float64` | `0.02` | - | Residual trapped metal volume fraction | $\in [0, \phi_{\text{crit\_perc}}]$ |
+| `phi_residual` | `Float64` | `0.02` | - | Irreducible percolation trap fraction, blended smoothly to zero across $[F_{\text{settle\_start}}, F_{\text{perc\_end}}]$ when settling is active | $\in [0, \phi_{\text{crit\_perc}}]$ |
 | `phi0` | `Float64` | `0.1` | - | Reference porosity for liquid metal Kozeny-Carman permeability | $\in (0, 1)$ |
 | `droplet_size_mode` | `Symbol` | `:capillary_mean` | - | Metal droplet diameter calculation mode (`:capillary_mean`, `:bond_mean`, `:weber_mean`, `:weber_turbulent`, `:fixed`) | valid symbol |
 | `droplet_diameter_fixed` | `Float64` | `5.0e-3` | m | Fixed droplet diameter when `droplet_size_mode = :fixed` | $> 0$ |
@@ -482,8 +482,8 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 | `hadamard_rybczynski` | `Bool` | `false` | - | Enable fluid droplet internal circulation correction factor | `true` / `false` |
 | `F_settle_start` | `Float64` | `0.40` | - | Silicate melt fraction where settling commences | $\in [0, 1]$ |
 | `F_perc_end` | `Float64` | `0.50` | - | Silicate melt fraction where percolation terminates | $\in [F_{\text{settle\_start}}, 1]$ |
-| `segregation_heating` | `Bool` | `true` | - | Enable gravitational potential energy dissipation heating | `true` / `false` |
-| `cfl_settling` | `Float64` | `0.5` | - | Courant-Friedrichs-Lewy stability safety factor for subcycling | $\in (0, 1]$ |
+| `segregation_heating` | `Bool` | `true` | - | Enable gravitational potential energy dissipation heating (counterflow sensible-heat exchange runs independently on active steps) | `true` / `false` |
+| `cfl_settling` | `Float64` | `0.5` | - | Courant-Friedrichs-Lewy stability factor for characteristic wave-speed subcycling | $\in (0, 1]$ |
 | `max_subcycles` | `Int` | `2000` | - | Maximum allowed subcycles per hydrodynamic step | $\ge 1$ |
 
 ---
@@ -761,7 +761,7 @@ buffer_markers_per_cell = 16
 
 ## `[porosity]`
 
-Dry rock porosity by cold pressing and hot sintering, after Henke et al. (2012) and Lichtenberg et al. (2016a).
+Dry rock porosity by cold pressing and hot sintering, after [Henke et al. (2012)](bibliography.md#Porosity,-Cold-Pressing,-and-Sintering) and [Lichtenberg et al. (2016a)](bibliography.md#Porosity,-Cold-Pressing,-and-Sintering).
 With `model = "none"` the porosity code of the other sections runs unchanged and no extra marker arrays exist.
 With `model = "henke2012"` every rock marker carries a dry porosity that cold pressing and hot sintering lower.
 This model needs dry rock and switches off the processes that need pore water, melt or metal, as in the example below.
@@ -817,9 +817,9 @@ T_dehydrate_H = 750.0
 | Parameter | Type | Default | Units | Description | Bounds / Options |
 |:----------|:-----|:--------|:------|:------------|:-----------------|
 | `active` | `Bool` | `false` | - | Enable refractory phase tracking | `true` / `false` |
-| `f_refr_C` | `Float64` | `0.60` | - | Refractory carbon fraction in accreted dust (Bergin et al. 2026) | $\in [0, 1]$ |
+| `f_refr_C` | `Float64` | `0.60` | - | Refractory carbon fraction in accreted dust ([Bergin et al., 2026](bibliography.md#Volatile-Mixtures-and-Refractory-Elements)) | $\in [0, 1]$ |
 | `f_refr_N` | `Float64` | `0.10` | - | Refractory nitrogen fraction in dust | $\in [0, 1]$ |
-| `f_refr_S` | `Float64` | `0.89` | - | Refractory sulfur fraction locked in FeS (Kama et al. 2019) | $\in [0, 1]$ |
+| `f_refr_S` | `Float64` | `0.89` | - | Refractory sulfur fraction locked in FeS ([Kama et al., 2019](bibliography.md#Volatile-Mixtures-and-Refractory-Elements)) | $\in [0, 1]$ |
 | `f_refr_P` | `Float64` | `0.98` | - | Refractory phosphorus fraction in schreibersite / phosphates | $\in [0, 1]$ |
 | `f_refr_H` | `Float64` | `0.05` | - | Refractory hydrogen fraction in organics | $\in [0, 1]$ |
 | `T_pyrolysis_C` | `Float64` | `600.0` | K | Thermal pyrolysis threshold for insoluble organic matter | $\ge 0$ |
@@ -840,7 +840,7 @@ T_dehydrate_H = 750.0
 
 ## `[redox]`
 
-Configuration for extensive redox budget accounting (Evans 2012) and dynamic local oxygen fugacity buffering.
+Configuration for extensive redox budget accounting ([Evans, 2012](bibliography.md#Thermodynamics,-Redox-Buffers,-and-Gas-Speciation)) and dynamic local oxygen fugacity buffering.
 
 ```toml
 [redox]
@@ -858,7 +858,7 @@ w_graphite_threshold = 1.0e-6
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
 |:----------|:-----|:--------|:------|:------------|:-----------------|
-| `active` | `Bool` | `false` | - | Enable extensive redox budget tracking and local oxygen fugacity buffering (Evans 2012) | `true` / `false` |
+| `active` | `Bool` | `false` | - | Enable extensive redox budget tracking and local oxygen fugacity buffering ([Evans, 2012](bibliography.md#Thermodynamics,-Redox-Buffers,-and-Gas-Speciation)) | `true` / `false` |
 | `reference` | `Symbol` | `:mantle` | - | Reference electron oxidation state | `:mantle`, `:crust` |
 | `serpentinization_redox` | `Bool` | `true` | - | Couple hydrothermal serpentine formation to Fe oxidation and H2 production | `true` / `false` |
 | `segregation_redox` | `Bool` | `true` | - | Couple metallic core segregation to mantle oxidation | `true` / `false` |

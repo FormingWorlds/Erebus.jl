@@ -585,6 +585,7 @@ $(SIGNATURES)
   - `M_total_C_met`: Total metal-hosted C mass across planet [kg]
   - `M_total_N_met`: Total metal-hosted N mass across planet [kg]
   - `M_total_S_met`: Total metal-hosted S mass across planet [kg]
+  - `V_core_total`: Total 3D volume of markers satisfying `Xfe_bulk >= phi_core_threshold` [m^3]
 """
 function compute_core_volatile_budgets(
     xm::AbstractVector{Float64},
@@ -621,6 +622,7 @@ function compute_core_volatile_budgets(
         throw(DomainError(rho_metal, "rho_metal must be strictly positive and finite"))
 
     M_core_metal = 0.0
+    V_core_total = 0.0
     M_core_H = 0.0
     M_core_C = 0.0
     M_core_N = 0.0
@@ -679,6 +681,7 @@ function compute_core_volatile_budgets(
 
                     if fe_frac >= phi_cut
                         M_core_metal += dM_fe
+                        V_core_total += v_area * w3d
                         M_core_H += dH
                         M_core_C += dC
                         M_core_N += dN
@@ -697,6 +700,7 @@ function compute_core_volatile_budgets(
 
     return (;
         M_core_metal,
+        V_core_total,
         M_core_H,
         M_core_C,
         M_core_N,

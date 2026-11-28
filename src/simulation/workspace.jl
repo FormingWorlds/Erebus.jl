@@ -14,10 +14,10 @@ mutable struct MetalSegregationWorkspace
     v_seg_cell::Matrix{Float64}
     phi_m_cell::Matrix{Float64}
     F_m_cell::Matrix{Float64}
-    Xfem_cell::Matrix{Float64}
+    v_perc_cell::Matrix{Float64}
     g_acc_cell::Matrix{Float64}
     cap_cell::Matrix{Float64}
-    phi_fe_cell::Matrix{Float64}
+    phi_trap_cell::Matrix{Float64}
     T_cell::Matrix{Float64}
     drho_cell::Matrix{Float64}
     M_fe_H_cell::Matrix{Float64}
@@ -45,6 +45,10 @@ mutable struct MetalSegregationWorkspace
     inflow_tot::Matrix{Float64}
     alpha_out::Matrix{Float64}
     alpha_in::Matrix{Float64}
+    m_solid_cell::Matrix{Float64}
+    v_stokes0_cell::Matrix{Float64}
+    v_char_cell::Matrix{Float64}
+    T_star_cell::Matrix{Float64}
 
     function MetalSegregationWorkspace(Ny::Integer, Nx::Integer; track_volatiles::Bool=true)
         Ny_val = Int(Ny)
@@ -89,6 +93,10 @@ mutable struct MetalSegregationWorkspace
             zeros(Float64, Ny_val, Nx_val),
             ones(Float64, Ny_val, Nx_val),
             ones(Float64, Ny_val, Nx_val),
+            zeros(Float64, Ny_val, Nx_val),
+            zeros(Float64, Ny_val, Nx_val),
+            zeros(Float64, Ny_val, Nx_val),
+            zeros(Float64, Ny_val, Nx_val),
         )
     end
 end

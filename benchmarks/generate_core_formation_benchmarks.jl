@@ -146,23 +146,26 @@ function run_core_formation_sim(
         # Effective viscosity
         eta_matrix = zeros(Float64, Nr)
         v_seg = zeros(Float64, Nr)
+        v_perc_r = zeros(Float64, Nr)
+        v_stokes0_r = zeros(Float64, Nr)
         Q_seg = zeros(Float64, Nr)
         drho_shell = zeros(Float64, Nr)
         rho_bulk = zeros(Float64, Nr)
 
         for i in 1:Nr
-            # Melt weakened suspension viscosity
-            eta_matrix[i] = compute_melt_weakened_viscosity(
+            # Smooth melt-weakened suspension viscosity (Roscoe / Solomatov)
+            eta_matrix[i] = compute_silicate_suspension_viscosity(
                 ETA_SOLID_MATRIX,
-                Fm[i],
-                1;
+                Fm[i];
+                alpha_eta=28.0,
                 phi_crit=0.40,
                 eta_melt=10.0,
-                etamin=0.1,
+                etamin=0.01,
                 etamax=ETA_SOLID_MATRIX,
             )
 
-            drho = RHO_METAL_MELT - (Fm[i] > 0.5 ? RHO_SIL_MELT : RHO_SIL_SOLID)
+            rho_sil_eff = Fm[i] * RHO_SIL_MELT + (1.0 - Fm[i]) * RHO_SIL_SOLID
+            drho = max(RHO_METAL_MELT - rho_sil_eff, 1.0)
 
             # Droplet radius
             r_drop = if droplet_mode === :fixed
@@ -208,6 +211,40 @@ function run_core_formation_sim(
                 F_perc_end=0.50,
             )
             v_seg[i] = v_s
+            v_perc_r[i] = if percolation_active
+                metal_segregation_velocity(
+                    phi_m[i],
+                    Fm[i],
+                    drho,
+                    g_r[i],
+                    eta_matrix[i];
+                    percolation_active=true,
+                    settling_active=false,
+                    k_metal_ref=K_REF_METAL,
+                    eta_metal=ETA_METAL,
+                    phi_crit_perc=PHI_CRIT_PERC,
+                    phi_residual=PHI_RESIDUAL,
+                    phi0=0.10,
+                    perm_exponent=3.0,
+                    F_settle_start=0.40,
+                    F_perc_end=0.50,
+                )
+            else
+                0.0
+            end
+            v_stokes0_r[i] =
+                if settling_active && Fm[i] >= 0.40 && drho > 0.0 && g_r[i] > 0.0
+                    stokes_settling_velocity(
+                        r_drop,
+                        drho,
+                        g_r[i],
+                        eta_matrix[i];
+                        hadamard_rybczynski=true,
+                        eta_metal=ETA_METAL,
+                    )
+                else
+                    0.0
+                end
 
             drho_shell[i] = drho
 
@@ -227,19 +264,48 @@ function run_core_formation_sim(
             cfl_dt = 0.5 * dr / max_v
             n_sub = clamp(Int(ceil(dt_sec / cfl_dt)), 1, 500)
             dt_sub = dt_sec / n_sub
+            cfg_1d = CoreFormationConfig(;
+                percolation_active=percolation_active,
+                settling_active=settling_active,
+                k_metal_ref=K_REF_METAL,
+                eta_metal=ETA_METAL,
+                phi_crit_perc=PHI_CRIT_PERC,
+                phi_residual=PHI_RESIDUAL,
+                phi0=0.10,
+                perm_exponent=3.0,
+                hindered_exponent=4.5,
+                phi_pack=PHI_PACK,
+                F_settle_start=0.40,
+                F_perc_end=0.50,
+            )
 
             for _ in 1:n_sub
                 F_flux = zeros(Float64, Nr + 1)
                 for i in 2:Nr
-                    # face i connects cell i-1 (interior) and cell i (exterior)
-                    vf = 0.5 * (v_seg[i - 1] + v_seg[i])
+                    # Face i connects cell i-1 (interior receiver) and cell i (exterior donor)
                     donor = i
-                    phi_mob = max(phi_fe[donor] - PHI_RESIDUAL, 0.0) * chi_fe[donor]
                     receiver = i - 1
+                    phi_m_D = chi_fe[donor] * phi_fe[donor]
+                    phi_trap = effective_metal_trap_fraction(
+                        Fm[donor],
+                        PHI_RESIDUAL;
+                        percolation_active=percolation_active,
+                        settling_active=settling_active,
+                    )
+                    phi_mob = max(phi_m_D - phi_trap, 0.0)
                     cap = max(PHI_PACK - phi_fe[receiver], 0.0) * vol_shells[receiver]
+                    if phi_mob <= 0.0 || cap <= 0.0
+                        continue
+                    end
                     avail = phi_mob * vol_shells[donor]
-                    req_vol = areas[i] * vf * phi_mob * dt_sub
-                    F_flux[i] = min(req_vol, cap * 0.95, avail * 0.95)
+                    w_s_D = Erebus._metal_settling_blend_weight(Fm[donor], cfg_1d)
+                    q_perc = (1.0 - w_s_D) * v_perc_r[donor] * phi_m_D
+                    q_settle =
+                        w_s_D * Erebus._godunov_settling_flux(
+                            phi_m_D, phi_fe[receiver], v_stokes0_r[donor], 4.5, PHI_PACK
+                        )
+                    req_vol = areas[i] * (q_perc + q_settle) * dt_sub
+                    F_flux[i] = min(req_vol, cap, avail)
                 end
 
                 if segregation_heating
@@ -254,7 +320,7 @@ function run_core_formation_sim(
 
                 for i in 1:Nr
                     dM = F_flux[i + 1] - F_flux[i]
-                    phi_fe[i] = clamp(phi_fe[i] + dM / vol_shells[i], 0.0, PHI_PACK)
+                    phi_fe[i] += dM / vol_shells[i]
                 end
             end
         end
