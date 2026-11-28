@@ -43,6 +43,13 @@ const PHI_PACK = 0.65            # Maximum droplet packing fraction
 const PHI_RESIDUAL = 0.02        # Residual metal trapped in pores
 const PHI_CRIT_PERC = 0.05       # Critical percolation threshold
 const K_REF_METAL = 1.0e-9       # Reference permeability [m^2]
+const PHI0_PERC = 0.10           # Reference percolation porosity scale [-]
+const PERM_EXPONENT = 3.0        # Kozeny-Carman permeability exponent [-]
+const HINDERED_EXPONENT = 4.5    # Richardson-Zaki hindered settling exponent [-]
+const F_SETTLE_START = 0.40      # Melt fraction at percolation-settling transition start [-]
+const F_PERC_END = 0.50          # Melt fraction where percolation ends [-]
+const CFL_1D = 0.5               # Advective CFL safety factor [-]
+const MAX_SUBCYCLES_1D = 2000    # Maximum segregation substeps per outer step [-]
 
 # Radiogenic heating (26Al)
 const TAU_26AL = 1.034e6 * 365.25 * 86400.0 # 1.034 Ma mean lifetime [s]
@@ -52,6 +59,125 @@ const Q0_26AL = 1.10e-7                      # Radiogenic heating rate per kg of
 const G_CONST = 6.6743e-11
 const RHO_MEAN = 3200.0
 const G_SURF = (4.0 / 3.0) * pi * G_CONST * RHO_MEAN * R_PLANET # ~ 0.0447 m/s^2
+
+"""
+Evaluate `metal_segregation_velocity` using shared 1-D benchmark configuration parameters.
+"""
+function _v_seg_1d(
+    phi_m_val::Float64,
+    Fm_val::Float64,
+    drho::Float64,
+    g_val::Float64,
+    eta_val::Float64,
+    r_drop::Float64,
+    cfg::CoreFormationConfig;
+    perc::Bool=cfg.percolation_active,
+    settle::Bool=cfg.settling_active,
+)::Float64
+    return metal_segregation_velocity(
+        phi_m_val,
+        Fm_val,
+        drho,
+        g_val,
+        eta_val;
+        percolation_active=perc,
+        settling_active=settle,
+        k_metal_ref=cfg.k_metal_ref,
+        eta_metal=cfg.eta_metal,
+        phi_crit_perc=cfg.phi_crit_perc,
+        phi_residual=cfg.phi_residual,
+        phi0=cfg.phi0,
+        perm_exponent=cfg.perm_exponent,
+        r_drop=r_drop,
+        hindered_exponent=cfg.hindered_exponent,
+        phi_pack=cfg.phi_pack,
+        hadamard_rybczynski=cfg.hadamard_rybczynski,
+        F_settle_start=cfg.F_settle_start,
+        F_perc_end=cfg.F_perc_end,
+    )
+end
+
+"""
+Return smooth cubic Hermite regime blend weight (0 in percolation, 1 in settling).
+"""
+function _settling_blend_1d(F_m::Float64, cfg::CoreFormationConfig)::Float64
+    if cfg.percolation_active && !cfg.settling_active
+        return 0.0
+    elseif !cfg.percolation_active && cfg.settling_active
+        return 1.0
+    elseif !cfg.percolation_active && !cfg.settling_active
+        return 0.0
+    elseif F_m <= cfg.F_settle_start
+        return 0.0
+    elseif F_m >= cfg.F_perc_end
+        return 1.0
+    else
+        s = (F_m - cfg.F_settle_start) / (cfg.F_perc_end - cfg.F_settle_start)
+        return s * s * (3.0 - 2.0 * s)
+    end
+end
+
+"""
+Return Darcy percolation characteristic wave speed |dq_perc/dphi_m| [m/s].
+"""
+function _perc_wave_speed_1d(
+    phi_m_val::Float64, v_perc_val::Float64, cfg::CoreFormationConfig
+)::Float64
+    v_perc_val <= 0.0 && return 0.0
+    phi_perm = min(clamp(phi_m_val, 0.0, 1.0), 1.0 - 1.0e-7)
+    phi_mob_p = phi_perm - cfg.phi_crit_perc
+    phi_mob_p <= 0.0 && return 0.0
+    phi_mob_eff = 0.0 < cfg.perm_exponent < 1.0 ? max(phi_mob_p, 1.0e-7) : phi_mob_p
+    return v_perc_val *
+           phi_perm *
+           (cfg.perm_exponent / phi_mob_eff + 2.0 / (1.0 - phi_mob_p))
+end
+
+"""
+Compute 1-D Godunov hindered-settling flux and maximum characteristic wave speed [m/s].
+"""
+function _godunov_settling_1d(
+    phi_D::Float64, phi_R::Float64, v0_D::Float64, m_exp::Float64, phi_pack::Float64
+)::Tuple{Float64,Float64}
+    if v0_D <= 0.0 || phi_pack <= 0.0
+        return (0.0, 0.0)
+    end
+    pd = clamp(phi_D, 0.0, phi_pack)
+    pr = clamp(phi_R, 0.0, phi_pack)
+    f_val = (p) -> (p <= 0.0 || p >= phi_pack) ? 0.0 : v0_D * p * (1.0 - p / phi_pack)^m_exp
+    df_abs =
+        (p) -> begin
+            if p < 0.0 || p > phi_pack
+                return 0.0
+            elseif iszero(m_exp)
+                return p < phi_pack ? v0_D : 0.0
+            end
+            u = 0.0 < m_exp < 1.0 ? min(p / phi_pack, 1.0 - 1.0e-7) : (p / phi_pack)
+            if p >= phi_pack && m_exp >= 1.0
+                return isapprox(m_exp, 1.0; atol=1.0e-12) ? v0_D : 0.0
+            end
+            return v0_D * (max(1.0 - u, 0.0)^(m_exp - 1.0)) * abs(1.0 - (m_exp + 1.0) * u)
+        end
+    q_d = f_val(pd)
+    q_r = f_val(pr)
+    q_settle = if pd <= pr
+        min(q_d, q_r)
+    else
+        qm = max(q_d, q_r)
+        p_star = phi_pack / (m_exp + 1.0)
+        (pr < p_star < pd && 0.0 < p_star < phi_pack) ? max(qm, f_val(p_star)) : qm
+    end
+    pa = min(pd, pr)
+    pb = max(pd, pr)
+    wmax = max(df_abs(pa), df_abs(pb))
+    if m_exp > 1.0
+        p_inflect = 2.0 * phi_pack / (m_exp + 1.0)
+        if pa < p_inflect < pb
+            wmax = max(wmax, df_abs(p_inflect))
+        end
+    end
+    return (q_settle, wmax)
+end
 
 """
 Run a 1D spherical core formation benchmark simulation.
@@ -109,6 +235,22 @@ function run_core_formation_sim(
     t_save_interval = t_end_yr / n_save_snaps
     next_save_t = 0.0
     total_diss_energy = 0.0
+    M_fe_init = sum(phi_fe[i] * vol_shells[i] for i in 1:Nr)
+    cfg_1d = CoreFormationConfig(;
+        percolation_active=percolation_active,
+        settling_active=settling_active,
+        k_metal_ref=K_REF_METAL,
+        eta_metal=ETA_METAL,
+        phi_crit_perc=PHI_CRIT_PERC,
+        phi_residual=PHI_RESIDUAL,
+        phi0=PHI0_PERC,
+        perm_exponent=PERM_EXPONENT,
+        hindered_exponent=HINDERED_EXPONENT,
+        phi_pack=PHI_PACK,
+        hadamard_rybczynski=true,
+        F_settle_start=F_SETTLE_START,
+        F_perc_end=F_PERC_END,
+    )
 
     step = 0
     while t_yr <= t_end_yr
@@ -145,24 +287,27 @@ function run_core_formation_sim(
 
         # Effective viscosity
         eta_matrix = zeros(Float64, Nr)
+        r_drop_arr = zeros(Float64, Nr)
         v_seg = zeros(Float64, Nr)
+        v_stokes0_r = zeros(Float64, Nr)
         Q_seg = zeros(Float64, Nr)
         drho_shell = zeros(Float64, Nr)
         rho_bulk = zeros(Float64, Nr)
 
         for i in 1:Nr
-            # Melt weakened suspension viscosity
-            eta_matrix[i] = compute_melt_weakened_viscosity(
+            # Smooth melt-weakened suspension viscosity (Roscoe / Solomatov)
+            eta_matrix[i] = compute_silicate_suspension_viscosity(
                 ETA_SOLID_MATRIX,
-                Fm[i],
-                1;
+                Fm[i];
+                alpha_eta=28.0,
                 phi_crit=0.40,
                 eta_melt=10.0,
-                etamin=0.1,
+                etamin=0.01,
                 etamax=ETA_SOLID_MATRIX,
             )
 
-            drho = RHO_METAL_MELT - (Fm[i] > 0.5 ? RHO_SIL_MELT : RHO_SIL_SOLID)
+            rho_sil_eff = Fm[i] * RHO_SIL_MELT + (1.0 - Fm[i]) * RHO_SIL_SOLID
+            drho = max(RHO_METAL_MELT - rho_sil_eff, 1.0)
 
             # Droplet radius
             r_drop = if droplet_mode === :fixed
@@ -185,29 +330,24 @@ function run_core_formation_sim(
                 )
                 clamp(d_w / 2.0, 1.0e-4, 0.05)
             end
+            r_drop_arr[i] = r_drop
 
-            v_s = metal_segregation_velocity(
-                phi_m[i],
-                Fm[i],
-                drho,
-                g_r[i],
-                eta_matrix[i];
-                percolation_active=percolation_active,
-                settling_active=settling_active,
-                k_metal_ref=K_REF_METAL,
-                eta_metal=ETA_METAL,
-                phi_crit_perc=PHI_CRIT_PERC,
-                phi_residual=PHI_RESIDUAL,
-                phi0=0.10,
-                perm_exponent=3.0,
-                r_drop=r_drop,
-                hindered_exponent=4.5,
-                phi_pack=PHI_PACK,
-                hadamard_rybczynski=true,
-                F_settle_start=0.40,
-                F_perc_end=0.50,
+            v_seg[i] = _v_seg_1d(
+                phi_m[i], Fm[i], drho, g_r[i], eta_matrix[i], r_drop, cfg_1d
             )
-            v_seg[i] = v_s
+            v_stokes0_r[i] =
+                if settling_active && Fm[i] >= cfg_1d.F_settle_start && g_r[i] > 0.0
+                    stokes_settling_velocity(
+                        r_drop,
+                        drho,
+                        g_r[i],
+                        eta_matrix[i];
+                        hadamard_rybczynski=cfg_1d.hadamard_rybczynski,
+                        eta_metal=cfg_1d.eta_metal,
+                    )
+                else
+                    0.0
+                end
 
             drho_shell[i] = drho
 
@@ -223,27 +363,91 @@ function run_core_formation_sim(
 
         # 2. Segregation transport (subcycled conservative finite-volume inward flux)
         max_v = maximum(v_seg)
-        if max_v > 0.0
-            cfl_dt = 0.5 * dr / max_v
-            n_sub = clamp(Int(ceil(dt_sec / cfl_dt)), 1, 500)
-            dt_sub = dt_sec / n_sub
-
-            for _ in 1:n_sub
-                F_flux = zeros(Float64, Nr + 1)
+        if percolation_active || settling_active
+            F_flux = zeros(Float64, Nr + 1)
+            req_rate = zeros(Float64, Nr + 1)
+            w_s_arr = [_settling_blend_1d(Fm[i], cfg_1d) for i in 1:Nr]
+            phi_trap_arr = [
+                effective_metal_trap_fraction(
+                    Fm[i],
+                    PHI_RESIDUAL;
+                    percolation_active=percolation_active,
+                    settling_active=settling_active,
+                    F_settle_start=cfg_1d.F_settle_start,
+                    F_perc_end=cfg_1d.F_perc_end,
+                ) for i in 1:Nr
+            ]
+            t_rem = dt_sec
+            sub = 0
+            while t_rem > 1.0e-12 * dt_sec && sub < MAX_SUBCYCLES_1D
+                fill!(req_rate, 0.0)
+                max_v_char = 0.0
                 for i in 2:Nr
-                    # face i connects cell i-1 (interior) and cell i (exterior)
-                    vf = 0.5 * (v_seg[i - 1] + v_seg[i])
                     donor = i
-                    phi_mob = max(phi_fe[donor] - PHI_RESIDUAL, 0.0) * chi_fe[donor]
                     receiver = i - 1
+                    phi_m_D = phi_m[donor]
+                    phi_mob = max(phi_m_D - phi_trap_arr[donor], 0.0)
+                    cap_R = max(PHI_PACK - phi_fe[receiver], 0.0) * vol_shells[receiver]
+                    if phi_mob <= 1.0e-15 || cap_R <= 1.0e-12 * vol_shells[receiver]
+                        continue
+                    end
+                    w_s_D = w_s_arr[donor]
+                    v_perc_D = if percolation_active && w_s_D < 1.0
+                        _v_seg_1d(
+                            phi_m_D,
+                            Fm[donor],
+                            drho_shell[donor],
+                            g_r[donor],
+                            eta_matrix[donor],
+                            r_drop_arr[donor],
+                            cfg_1d;
+                            perc=true,
+                            settle=false,
+                        )
+                    else
+                        0.0
+                    end
+                    q_perc = (1.0 - w_s_D) * v_perc_D * phi_m_D
+                    q_settle, c_settle = if w_s_D > 0.0
+                        _godunov_settling_1d(
+                            phi_m_D,
+                            phi_fe[receiver],
+                            v_stokes0_r[donor],
+                            cfg_1d.hindered_exponent,
+                            cfg_1d.phi_pack,
+                        )
+                    else
+                        (0.0, 0.0)
+                    end
+                    q_tot = q_perc + w_s_D * q_settle
+                    q_tot <= 0.0 && continue
+                    c_perc = (1.0 - w_s_D) * _perc_wave_speed_1d(phi_m_D, v_perc_D, cfg_1d)
+                    v_seg_D = _v_seg_1d(
+                        phi_m_D,
+                        Fm[donor],
+                        drho_shell[donor],
+                        g_r[donor],
+                        eta_matrix[donor],
+                        r_drop_arr[donor],
+                        cfg_1d,
+                    )
+                    max_v_char = max(max_v_char, max(v_seg_D, c_perc + w_s_D * c_settle))
+                    req_rate[i] = areas[i] * q_tot
+                end
+                (max_v_char <= 0.0 || !any(>(0.0), req_rate)) && break
+                sub += 1
+                dt_sub = min(t_rem, (CFL_1D * dr) / max_v_char)
+                fill!(F_flux, 0.0)
+                for i in 2:Nr
+                    req_rate[i] <= 0.0 && continue
+                    donor = i
+                    receiver = i - 1
+                    avail = max(phi_m[donor] - phi_trap_arr[donor], 0.0) * vol_shells[donor]
                     cap = max(PHI_PACK - phi_fe[receiver], 0.0) * vol_shells[receiver]
-                    avail = phi_mob * vol_shells[donor]
-                    req_vol = areas[i] * vf * phi_mob * dt_sub
-                    F_flux[i] = min(req_vol, cap * 0.95, avail * 0.95)
+                    F_flux[i] = min(req_rate[i] * dt_sub, cap, avail)
                 end
 
                 if segregation_heating
-                    # Heat follows the metal volume that crosses each shell in this substep.
                     for i in 1:Nr
                         moved = 0.5 * (F_flux[i] + F_flux[i + 1])
                         q_d = drho_shell[i] * g_r[i] * moved * dr / vol_shells[i] / dt_sec
@@ -253,10 +457,18 @@ function run_core_formation_sim(
                 end
 
                 for i in 1:Nr
-                    dM = F_flux[i + 1] - F_flux[i]
-                    phi_fe[i] = clamp(phi_fe[i] + dM / vol_shells[i], 0.0, PHI_PACK)
+                    phi_fe[i] += (F_flux[i + 1] - F_flux[i]) / vol_shells[i]
+                    @assert -1.0e-12 <= phi_fe[i] <= PHI_PACK + 1.0e-12 "1-D phi_fe[$i] out of bounds: $(phi_fe[i])"
+                    phi_fe[i] = clamp(phi_fe[i], 0.0, PHI_PACK)
+                    phi_m[i] = chi_fe[i] * phi_fe[i]
                 end
+                t_rem -= dt_sub
             end
+            if sub == MAX_SUBCYCLES_1D && t_rem > 1.0e-9 * dt_sec
+                @warn "1-D benchmark reached MAX_SUBCYCLES_1D=$(MAX_SUBCYCLES_1D) with $(round(t_rem / dt_sec; digits=3)) of dt unstepped" maxlog=10
+            end
+            M_fe_now = sum(phi_fe[i] * vol_shells[i] for i in 1:Nr)
+            @assert isapprox(M_fe_now, M_fe_init; rtol=1.0e-11) "1-D metal mass drift: $(M_fe_now) vs $(M_fe_init)"
         end
 
         # 3. Thermal solve (Implicit spherical diffusion with 26Al decay and Q_seg)

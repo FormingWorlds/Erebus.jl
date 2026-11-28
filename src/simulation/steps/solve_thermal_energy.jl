@@ -326,10 +326,22 @@ function solve_thermal_energy!(
             rplanet=state.accumulators.rplanet,
             gx=g.gx,
             gy=g.gy,
-            Q_seg_grid=cfg.coreformation.segregation_heating ? g.Q_seg_grid : nothing,
+            Q_seg_grid=g.Q_seg_grid,
+            dissipation_heating=cfg.coreformation.segregation_heating,
+            sensible_heat_exchange=true,
             rho_silicate=cfg.materials.rhosolidm[1],
+            rho_silicate_melt=(
+                cfg.melting.active ? cfg.melting.rho_melt : cfg.materials.rhosolidm[1]
+            ),
+            rhocp_silicate=cfg.materials.rhocpsolidm[1],
             eta_silicate=cfg.materials.etasolidm[1],
-            ETA=g.ETA,
+            eta_silicate_hot=cfg.materials.etasolidmm[1],
+            tmsolidphase=cfg.thermodynamics.tmsolidphase,
+            alpha_eta=cfg.melting.alpha_eta,
+            phi_crit_silicate=cfg.melting.phi_crit,
+            eta_melt_silicate=cfg.melting.eta_melt,
+            etamax=cfg.solver.etamax,
+            ETA=nothing,
             Fm=core.Fm,
             T_solidus_silicate=cfg.melting.T_solidus[1],
             T_liquidus_silicate=cfg.melting.T_liquidus[1],
@@ -342,7 +354,7 @@ function solve_thermal_energy!(
             w3d_m=core.w3d_m,
             workspace=ws.metal_segregation,
         )
-        state.accumulators.max_v_seg_prev = seg_res.max_v_seg
+        state.accumulators.max_v_seg_prev = seg_res.max_v_char
     end
 
     if cfg.venting.active && cfg.venting.latent_cooling
@@ -358,7 +370,7 @@ function solve_thermal_energy!(
     end
 
     Q_seg_val =
-        if (coreformation_active_val && cfg.coreformation.segregation_heating) || (
+        if coreformation_active_val || (
             magma_active_val && (
                 cfg.magma_transport.segregation_heating ||
                 cfg.magma_transport.sensible_heat_transport

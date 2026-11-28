@@ -111,9 +111,12 @@ using Erebus
         )
 
         @test res_no_ws.max_v_seg ≈ res_ws.max_v_seg
+        @test res_no_ws.max_v_char ≈ res_ws.max_v_char
         @test res_no_ws.n_subcycles == res_ws.n_subcycles
         @test res_no_ws.dt_sub ≈ res_ws.dt_sub
         @test res_no_ws.total_dissipation_energy ≈ res_ws.total_dissipation_energy
+        @test res_no_ws.total_sensible_energy ≈ res_ws.total_sensible_energy
+        @test res_no_ws.raw_conservation_rel_error ≈ res_ws.raw_conservation_rel_error
         @test Xfe_bulk1 ≈ Xfe_bulk2
         @test Xfem1 ≈ Xfem2
 
@@ -316,9 +319,12 @@ using Erebus
         )
 
         @test res_no_ws.max_v_seg ≈ res_ws.max_v_seg
+        @test res_no_ws.max_v_char ≈ res_ws.max_v_char
         @test res_no_ws.n_subcycles == res_ws.n_subcycles
         @test res_no_ws.dt_sub ≈ res_ws.dt_sub
         @test res_no_ws.total_dissipation_energy ≈ res_ws.total_dissipation_energy
+        @test res_no_ws.total_sensible_energy ≈ res_ws.total_sensible_energy
+        @test res_no_ws.raw_conservation_rel_error ≈ res_ws.raw_conservation_rel_error
         @test Xfe_bulk1 ≈ Xfe_bulk2
         @test Xfe_H_1 ≈ Xfe_H_2
         @test Xfe_C_1 ≈ Xfe_C_2
