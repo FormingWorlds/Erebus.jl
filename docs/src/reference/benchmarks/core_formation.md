@@ -11,9 +11,12 @@ Early planetary differentiation separates dense metallic iron from lighter silic
 Iron-nickel-sulfur metal starts melting at $T_{\text{eutectic}} \approx 1213\text{ K}$ (lowered below the $\sim 1261\text{ K}$ pure Fe-FeS eutectic by Ni, P, and C), below the silicate solidus ($T_{\text{solidus}} \approx 1400\text{ K}$).
 Metal-silicate segregation spans three transport intervals:
 
-1. **Porous Percolation Regime ($F_m < 0.40$)**: In crystalline silicate rock, liquid Fe-FeS melt percolates along mineral grain boundaries under gravity once the liquid metal fraction exceeds the percolation threshold ($\phi_{\text{crit,perc}} \approx 0.05$). The flow is governed by porous Darcy dynamics with Kozeny-Carman permeability.
-2. **Transition Mush Zone ($0.40 \le F_m \le 0.50$)**: Segregation velocity blends porous percolation with droplet settling between `F_settle_start` ($0.40$) and `F_perc_end` ($0.50$). Separately, above `[melting] phi_crit` (default $0.40$), silicate viscosity transitions smoothly into a crystal-suspension regime.
-3. **Magma Ocean Stokes Settling Regime ($F_m > 0.50$)**: Above $F_{\text{perc\_end}}$, metal moves by droplet settling alone. Dense liquid metal emulsifies into droplets whose diameter follows capillary-hydrodynamic balance, and droplets sink through the magma suspension following Stokes drag with hindered-settling corrections.
+1. **Porous Percolation Regime ($F_m < 0.40$)**: In crystalline silicate rock, liquid Fe-FeS melt percolates along mineral grain boundaries under gravity once the liquid metal fraction exceeds the percolation threshold ($\phi_{\text{crit,perc}} \approx 0.05$).
+   Porous Darcy dynamics with Kozeny-Carman permeability govern the flow.
+2. **Transition Mush Zone ($0.40 \le F_m \le 0.50$)**: Segregation velocity blends porous percolation with droplet settling between `F_settle_start` ($0.40$) and `F_perc_end` ($0.50$).
+   Separately, above `[melting] phi_crit` (default $0.40$), silicate viscosity transitions smoothly into a crystal-suspension regime.
+3. **Magma Ocean Stokes Settling Regime ($F_m > 0.50$)**: Above $F_{\text{perc\_end}}$, metal moves by droplet settling alone.
+   Dense liquid metal emulsifies into droplets whose diameter follows capillary-hydrodynamic balance, and droplets sink through the magma suspension following Stokes drag with hindered-settling corrections.
 
 Segregation also updates thermal energy and bulk cell properties:
 - **Dissipation Energetics**: Sinking metal releases gravitational potential energy as frictional heat, though in a 50 km body this heat is small relative to $^{26}\text{Al}$ heating.
@@ -64,9 +67,13 @@ $$\Delta t_{\text{CFL}} = \text{cfl\_settling} \cdot \frac{\min(\Delta x, \Delta
 
 To guarantee strict non-negativity and prevent exceeding maximum packing fraction $\phi_{\text{pack}}$ on 2D staggered grids:
 
-1. **Outflow Limiter**: For cell $(i, j)$ donating metal through horizontal and vertical faces, total face outflow $Out_{\text{total}} = \sum \Phi_{\text{out}} \Delta t_{\text{sub}}$ must not exceed available metal mass $m_{\text{avail}}$. All outward fluxes are scaled by $\alpha_{\text{out}} = \min(1.0, m_{\text{avail}} / Out_{\text{total}})$.
-2. **Inflow Limiter**: Total incoming flux $In_{\text{total}} = \sum \Phi_{\text{in}} \Delta t_{\text{sub}}$ must not exceed available 3D volume-weighted metal capacity $m_{\text{cap}} = \sum_{m \in \text{cell}} \max(0, \phi_{\text{pack}} - X_{\text{fe,bulk}}[m]) w_{3\text{D},m}$. All inward fluxes are scaled by $\alpha_{\text{in}} = \min(1.0, m_{\text{cap}} / In_{\text{total}})$.
-3. **Capacity-Weighted Marker Update**: When net cell mass changes are distributed back to markers, markers in cells gaining metal receive increments proportional to their remaining room below $\phi_{\text{pack}}$. Markers in cells losing metal scale proportionally to their molten metal fraction $X_{\text{fem}}$, keeping solid metal fixed. This guarantees that individual markers never violate $[0, \phi_{\text{pack}}]$, even with non-uniform initial distributions.
+1. **Outflow Limiter**: For cell $(i, j)$ donating metal through horizontal and vertical faces, total face outflow $Out_{\text{total}} = \sum \Phi_{\text{out}} \Delta t_{\text{sub}}$ must not exceed available metal mass $m_{\text{avail}}$.
+   All outward fluxes are scaled by $\alpha_{\text{out}} = \min(1.0, m_{\text{avail}} / Out_{\text{total}})$.
+2. **Inflow Limiter**: Total incoming flux $In_{\text{total}} = \sum \Phi_{\text{in}} \Delta t_{\text{sub}}$ must not exceed available 3D volume-weighted metal capacity $m_{\text{cap}} = \sum_{m \in \text{cell}} \max(0, \phi_{\text{pack}} - X_{\text{fe,bulk}}[m]) w_{3\text{D},m}$.
+   All inward fluxes are scaled by $\alpha_{\text{in}} = \min(1.0, m_{\text{cap}} / In_{\text{total}})$.
+3. **Capacity-Weighted Marker Update**: When net cell mass changes are distributed back to markers, markers in cells gaining metal receive increments proportional to their remaining room below $\phi_{\text{pack}}$.
+   Markers in cells losing metal scale proportionally to their molten metal fraction $X_{\text{fem}}$, keeping solid metal fixed.
+   This guarantees that individual markers never violate $[0, \phi_{\text{pack}}]$, even with non-uniform initial distributions.
 
 ### Machine-Precision Conservation
 
@@ -89,7 +96,9 @@ The planetesimal differentiates in four sequential stages driven by $^{26}\text{
 1. **Primordial Homogeneous Accretion ($t = 0\text{ Ma}$)**: The body starts completely cold ($T = 150\text{ K}$) and uniformly icy throughout its entire volume.
 2. **Pore Ice Melting and Rock Desiccation ($t \approx 0.3 - 0.8\text{ Ma}$)**: Radioactive decay warms the interior above 273.15 K. Pore ice melts in the interior and dehydrates the rock, while surface conductive cooling maintains a cold outer lid ($T < 273.15\text{ K}$) where primordial ice is preserved dynamically.
 3. **Porous Fe-FeS Percolation ($t \approx 1.0 - 1.4\text{ Ma}$)**: Interior temperatures reach the Fe-FeS eutectic ($T_{\text{eutectic}} = 1213\text{ K}$). Molten metallic alloy exceeds the percolation threshold ($\phi_{\text{crit,perc}} = 0.05$) and drains inward through crystalline silicate pores.
-4. **Magma Ocean Stokes Settling and Core Ponding ($t \approx 1.5 - 3.5\text{ Ma}$)**: Silicate melting crosses the solidus ($1400\text{ K}$) and reaches the settling onset ($F_{\text{settle\_start}} = 0.40$). Dense liquid metal droplets settle rapidly through the low-viscosity magma suspension. Droplets pond at the planetary center to form a segregated metallic core of radius $\approx 27\text{ km}$ at maximum packing ($\phi_{\text{pack}} = 0.65$), capped by an iron-depleted silicate mantle ($\phi_{\text{fe}} = 0.02$) and an outer primordial icy crust.
+4. **Magma Ocean Stokes Settling and Core Ponding ($t \approx 1.5 - 3.5\text{ Ma}$)**: Silicate melting crosses the solidus ($1400\text{ K}$) and reaches the settling onset ($F_{\text{settle\_start}} = 0.40$).
+   Dense liquid metal droplets settle rapidly through the low-viscosity magma suspension.
+   Droplets pond at the planetary center to form a segregated metallic core of radius $\approx 27\text{ km}$ at maximum packing ($\phi_{\text{pack}} = 0.65$), capped by an iron-depleted silicate mantle ($\phi_{\text{fe}} = 0.02$) and an outer primordial icy crust.
 
 ### Benchmark Results
 
